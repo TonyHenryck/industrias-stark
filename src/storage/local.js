@@ -2,7 +2,7 @@ import { emptyDb, isDb } from '../domain/queries.js';
 
 export const KEY = 'estoque-smartwatch-v1';
 
-export function load(){
+function readLocal(){
   try{
     const s = localStorage.getItem(KEY);
     if(s){ const d = JSON.parse(s); if(isDb(d)) return d; }
@@ -10,8 +10,13 @@ export function load(){
   return emptyDb();
 }
 
-/** Devolve false se o navegador não deixou gravar. */
-export function save(db){
-  try{ localStorage.setItem(KEY, JSON.stringify(db)); return true; }
-  catch(e){ return false; }
+/** Armazenamento no navegador (sem login, sem sincronização). */
+export function createLocal(){
+  return {
+    kind: 'local',
+    auth: null,
+    async load(){ return readLocal(); },
+    async save(db){ localStorage.setItem(KEY, JSON.stringify(db)); },
+    subscribe(){ return () => {}; },
+  };
 }
