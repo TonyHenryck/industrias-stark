@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.js';
 import { DomainError } from '../src/domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup } from '../src/domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo } from '../src/domain/operations.js';
 import { resumo, expText } from '../src/domain/reports.js';
 
 const novoProduto = (db, extra={}) => {
@@ -224,13 +224,17 @@ describe('baixa', () => {
 });
 
 describe('situação, resumo e exportação', () => {
-  test('situação: zerado, baixo e ok', () => {
+  test('situação: sem entradas, baixo, ok e zerado', () => {
     const db = emptyDb(), p = novoProduto(db);
-    assert.equal(situacao(db, p)[1], 'Zerado');
+    assert.equal(situacao(db, p)[1], 'Sem entradas');
+    assert.equal(resumo(db, 'tudo').alertas.length, 0, 'produto sem entradas não gera alerta');
     entrada(db, p, {qtd:'2'});
     assert.equal(situacao(db, p)[1], 'Baixo');
     entrada(db, p);
     assert.equal(situacao(db, p)[1], 'OK');
+    venda(db, p, {qtd:'3'});
+    assert.equal(situacao(db, p)[1], 'Zerado');
+    assert.deepEqual(resumo(db, 'tudo').alertas, [p]);
   });
 
   test('resumo ignora vendas canceladas', () => {
@@ -273,3 +277,43 @@ describe('backup', () => {
 });
 
 function sum(arr){ return arr.reduce((s,m) => s + m.valor, 0); }
+
+describe('importação de catálogo', () => {
+  const itens = [
+    {nome:'S10', marca:'Microwear', variante:'', custoPadrao:49, precoPadrao:0, minimo:0, fornecedor:'X', obs:''},
+    {nome:'Easy', marca:'Wearzone', variante:'', custoPadrao:95, precoPadrao:199, minimo:0, fornecedor:'X', obs:''},
+  ];
+
+  test('cadastra os itens e rodar de novo não duplica', async () => {
+    const db = emptyDb();
+    assert.match(importarCatalogo(db, itens), /2 produto\(s\) importado\(s\)\./);
+    assert.equal(db.products.length, 2);
+    assert.ok(db.products.every(p => p.id && p.criado));
+    assert.match(importarCatalogo(db, itens), /Nenhum produto novo/);
+    assert.equal(db.products.length, 2);
+  });
+
+  test('não sobrescreve produto já editado e ignora maiúsculas', () => {
+    const db = emptyDb();
+    importarCatalogo(db, itens);
+    salvarProduto(db, {id:db.products[0].id, nome:'S10', marca:'Microwear', custoPadrao:'51', precoPadrao:'99'});
+    importarCatalogo(db, [{...itens[0], nome:'s10', marca:'MICROWEAR'}, {...itens[1], nome:'Pulse'}]);
+    assert.equal(db.products.length, 3);
+    assert.equal(db.products[0].custoPadrao, 51);
+  });
+
+  test('o catálogo da XDistribuidora é válido e entra inteiro', async () => {
+    const {CATALOGO_XDISTRIBUIDORA: cat} = await import('../src/data/catalogo-xdistribuidora.js');
+    const chaves = cat.map(i => [i.marca, i.nome, i.variante].join('|').toLowerCase());
+    assert.equal(new Set(chaves).size, cat.length, 'sem itens repetidos');
+    for(const i of cat){
+      assert.ok(i.nome, 'nome obrigatório');
+      assert.ok(i.custoPadrao > 0, `${i.nome}: custo deve ser maior que zero`);
+      assert.ok(i.precoPadrao === 0 || i.precoPadrao > i.custoPadrao, `${i.nome}: preço de venda abaixo do custo`);
+      assert.equal(i.fornecedor, 'XDistribuidora');
+    }
+    const db = emptyDb();
+    importarCatalogo(db, cat);
+    assert.equal(db.products.length, cat.length);
+  });
+});
