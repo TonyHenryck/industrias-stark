@@ -5,8 +5,9 @@ import { unidadesRows } from './views/unidades.js';
 import { histRows } from './views/historico.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup } from '../domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo } from '../domain/operations.js';
 import { expText } from '../domain/reports.js';
+import { CATALOGO_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
 let store, unsubscribe = () => {}, busy = false;
 
@@ -109,6 +110,7 @@ document.addEventListener('click', async e => {
   else if(a==='editP'){ state.editId = b.dataset.id; state.view = 'produtos'; render(); window.scrollTo(0,0); }
   else if(a==='cancelEdit'){ state.editId = null; render(); }
   else if(a==='delP'){ await run(() => excluirProduto(state.db, b.dataset.id)); render(); }
+  else if(a==='importCatalogo'){ await run(() => importarCatalogo(state.db, CATALOGO_XDISTRIBUIDORA)); render(); }
   else if(a==='cancelVenda'){ await run(() => cancelarVenda(state.db, b.dataset.id)); render(); }
   else if(a==='logout'){ unsubscribe(); await store.auth.signOut(); }
   else if(a==='copy'){

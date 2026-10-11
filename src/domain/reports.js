@@ -15,7 +15,7 @@ export function resumo(db, periodo){
     valorEstoque: sum(disp,'custo'),
     receita, custo, lucro,
     margem: receita ? lucro/receita*100 : 0,
-    alertas: db.products.filter(p => situacao(db, p)[0] !== 'ok'),
+    alertas: db.products.filter(p => ['bad','warn'].includes(situacao(db, p)[0])),
   };
 }
 

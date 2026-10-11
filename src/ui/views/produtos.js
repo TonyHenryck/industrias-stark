@@ -1,5 +1,6 @@
 import { esc, brl } from '../format.js';
 import { prod, stock } from '../../domain/queries.js';
+import { CATALOGO_XDISTRIBUIDORA, CATALOGO_DATA } from '../../data/catalogo-xdistribuidora.js';
 
 export default ({db, editId}) => {
   const p = editId ? prod(db, editId) : null;
@@ -12,7 +13,13 @@ export default ({db, editId}) => {
       <td><div class="acts"><button class="btn small" data-act="editP" data-id="${x.id}">Editar</button>
       <button class="btn small" data-act="delP" data-id="${x.id}">Excluir</button></div></td></tr>`).join('')}
     </tbody></table></div>` : '<p class="empty">Nenhum produto cadastrado.</p>';
-  return `
+  const importar = p ? '' : `
+  <section class="card">
+    <h2>Catálogo do fornecedor</h2>
+    <p class="hint">Cadastra os ${CATALOGO_XDISTRIBUIDORA.length} itens da XDistribuidora (catálogo de ${CATALOGO_DATA}) com custo de atacado (5 a 50 peças) e preço sugerido de revenda quando existe. Quem já está cadastrado não é alterado.</p>
+    <div class="actions"><button class="btn" data-act="importCatalogo">Importar catálogo</button></div>
+  </section>`;
+  return `${importar}
   <section class="card">
     <h2>${p ? 'Editar produto' : 'Novo produto'}</h2>
     <form data-form="produto" class="form">

@@ -28,6 +28,23 @@ export function salvarProduto(db, f){
   return 'Produto cadastrado.';
 }
 
+const chaveProduto = p => [p.marca, p.nome, p.variante].map(x => str(x).trim().toLowerCase()).join('|');
+
+/** Cadastra os itens que ainda não existem (mesma marca, modelo e variante). Não altera os que já existem. */
+export function importarCatalogo(db, itens){
+  const existentes = new Set(db.products.map(chaveProduto));
+  let novos = 0;
+  for(const it of itens){
+    if(existentes.has(chaveProduto(it))) continue;
+    existentes.add(chaveProduto(it));
+    db.products.push({...it, id:uid(), criado:hoje()});
+    novos++;
+  }
+  const jaExistiam = itens.length - novos;
+  if(!novos) return 'Nenhum produto novo: todos já estavam cadastrados.';
+  return `${novos} produto(s) importado(s)` + (jaExistiam ? `, ${jaExistiam} já existiam.` : '.');
+}
+
 export function excluirProduto(db, id){
   if(db.units.some(u => u.productId===id) || db.moves.some(m => m.productId===id))
     fail('Este produto já tem movimentações. Edite em vez de excluir.');

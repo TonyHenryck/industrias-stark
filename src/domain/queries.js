@@ -9,10 +9,13 @@ export const stock = (db, pid) => units(db, pid).length;
 export const avgCost = (db, pid) => { const a = units(db, pid); return a.length ? sum(a,'custo')/a.length : 0; };
 export const nomeProd = p => p ? [p.nome, p.variante].filter(Boolean).join(' · ') : '(removido)';
 
-/** [classe, rótulo] da situação de estoque de um produto. */
+/**
+ * [classe, rótulo] da situação de estoque de um produto.
+ * Produto que nunca recebeu entrada (ex.: recém-importado do catálogo) não é alerta.
+ */
 export const situacao = (db, p) => {
   const s = stock(db, p.id);
-  if(s === 0) return ['bad','Zerado'];
+  if(s === 0) return db.units.some(u => u.productId === p.id) ? ['bad','Zerado'] : ['','Sem entradas'];
   if(p.minimo && s <= p.minimo) return ['warn','Baixo'];
   return ['ok','OK'];
 };
