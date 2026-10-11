@@ -1,0 +1,120 @@
+/*
+ * Regras de estoque. Cada função altera `db` e devolve a mensagem de sucesso,
+ * ou lança DomainError (sem alterar nada) quando a operação é inválida.
+ * Os dados de entrada são os valores crus dos formulários (strings).
+ */
+import { fail } from './errors.js';
+import { uid, str, hoje, fmtDate, parseSeriais, sortUnits } from './util.js';
+import { prod, units, nomeProd, isDb } from './queries.js';
+
+const produtoOuFalha = (db, id) => prod(db, id) || fail('Escolha o produto.');
+
+export function salvarProduto(db, f){
+  const nome = str(f.nome).trim();
+  if(!nome) fail('Informe o nome do modelo.');
+  const dados = {
+    nome, marca:str(f.marca).trim(), variante:str(f.variante).trim(),
+    custoPadrao: parseFloat(f.custoPadrao)||0,
+    precoPadrao: parseFloat(f.precoPadrao)||0,
+    minimo: parseInt(f.minimo)||0,
+    fornecedor: str(f.fornecedor).trim(), obs: str(f.obs).trim()
+  };
+  if(f.id){
+    const p = prod(db, f.id) || fail('Produto não encontrado.');
+    Object.assign(p, dados);
+    return 'Produto atualizado.';
+  }
+  db.products.push({id:uid(), ...dados, criado:hoje()});
+  return 'Produto cadastrado.';
+}
+
+export function excluirProduto(db, id){
+  if(db.units.some(u => u.productId===id) || db.moves.some(m => m.productId===id))
+    fail('Este produto já tem movimentações. Edite em vez de excluir.');
+  db.products = db.products.filter(p => p.id !== id);
+  return 'Produto excluído.';
+}
+
+export function addEntrada(db, f){
+  const p = produtoOuFalha(db, f.produto);
+  const seriais = parseSeriais(f.seriais);
+  const q = seriais.length || parseInt(f.qtd);
+  if(!q || q < 1) fail('Informe a quantidade.');
+  if(new Set(seriais).size !== seriais.length) fail('Há números de série repetidos na lista.');
+  const existe = seriais.find(s => db.units.some(u => u.serial === s));
+  if(existe) fail(`A série ${existe} já está cadastrada.`);
+  const custo = parseFloat(f.custo) || p.custoPadrao || 0;
+  const data = f.data || hoje(), id = uid(), ts = Date.now();
+  for(let i=0; i<q; i++)
+    db.units.push({id:uid(), productId:p.id, serial:seriais[i]||'', custo, status:'disponivel', entradaId:id, saidaId:'', dataEntrada:data, dataSaida:'', ts:ts+i});
+  db.moves.push({id, tipo:'entrada', data, productId:p.id, qty:q, custoUnit:custo, valor:q*custo,
+    fornecedor:str(f.fornecedor).trim(), serials:seriais, obs:str(f.obs).trim(), ts});
+  return `${q} unidade(s) registrada(s).`;
+}
+
+/** Escolhe as unidades que saem: as séries informadas, ou as mais antigas (FIFO). */
+function escolherUnidades(db, p, seriais, q){
+  const disp = sortUnits(units(db, p.id));
+  if(seriais.length){
+    const escolhidas = [];
+    for(const s of seriais){
+      const u = disp.find(x => x.serial === s && !escolhidas.includes(x));
+      if(!u) fail(`A série ${s} não está disponível para ${nomeProd(p)}.`);
+      escolhidas.push(u);
+    }
+    return escolhidas;
+  }
+  if(q > disp.length) fail(`Estoque insuficiente. Disponível: ${disp.length}.`);
+  return disp.slice(0, q);
+}
+
+export function addVenda(db, f){
+  const p = produtoOuFalha(db, f.produto);
+  const seriais = parseSeriais(f.seriais);
+  const preco = parseFloat(f.preco);
+  if(isNaN(preco) || preco < 0) fail('Informe o preço unitário.');
+  const q = seriais.length || parseInt(f.qtd);
+  if(!q || q < 1) fail('Informe a quantidade.');
+  const escolhidas = escolherUnidades(db, p, seriais, q);
+  const data = f.data || hoje(), id = uid();
+  const custo = escolhidas.reduce((s,u) => s + u.custo, 0), valor = q * preco;
+  escolhidas.forEach(u => { u.status='vendido'; u.saidaId=id; u.dataSaida=data; });
+  db.moves.push({id, tipo:'venda', data, productId:p.id, qty:q, precoUnit:preco, valor, custo, lucro:valor-custo,
+    cliente:str(f.cliente).trim(), pagamento:f.pagamento, serials:escolhidas.map(u=>u.serial).filter(Boolean),
+    obs:str(f.obs).trim(), cancelada:false, ts:Date.now()});
+  return 'Venda registrada.';
+}
+
+/** Devolve ao estoque as unidades da venda. Não faz nada se já estiver cancelada. */
+export function cancelarVenda(db, id){
+  const m = db.moves.find(x => x.id === id);
+  if(!m || m.tipo !== 'venda' || m.cancelada) return null;
+  db.units.filter(u => u.saidaId === id).forEach(u => { u.status='disponivel'; u.saidaId=''; u.dataSaida=''; });
+  m.cancelada = true;
+  db.moves.push({id:uid(), tipo:'cancelamento', data:hoje(), productId:m.productId, qty:m.qty, valor:-m.valor, ref:m.id,
+    serials:m.serials||[], obs:`Venda de ${fmtDate(m.data)} cancelada`, ts:Date.now()});
+  return 'Venda cancelada. As unidades voltaram ao estoque.';
+}
+
+export function addBaixa(db, f){
+  const p = produtoOuFalha(db, f.produto);
+  const q = parseInt(f.qtd);
+  if(!q || q < 1) fail('Informe a quantidade.');
+  const escolhidas = escolherUnidades(db, p, [], q);
+  const id = uid(), data = f.data || hoje();
+  const custo = escolhidas.reduce((s,u) => s + u.custo, 0);
+  escolhidas.forEach(u => { u.status='baixa'; u.saidaId=id; u.dataSaida=data; });
+  db.moves.push({id, tipo:'baixa', data, productId:p.id, qty:q, valor:custo, motivo:f.motivo,
+    serials:escolhidas.map(u=>u.serial).filter(Boolean), obs:str(f.obs).trim(), ts:Date.now()});
+  return 'Baixa registrada.';
+}
+
+/** Lê o texto de um backup JSON e devolve o db, ou lança DomainError. */
+export function parseBackup(texto){
+  const t = str(texto).trim();
+  if(!t) fail('Cole o conteúdo do backup.');
+  let d;
+  try{ d = JSON.parse(t); }catch(e){ fail('Conteúdo inválido. Verifique o backup.'); }
+  if(!isDb(d)) fail('Este conteúdo não é um backup deste sistema.');
+  return d;
+}
