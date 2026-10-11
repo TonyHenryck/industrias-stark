@@ -5,7 +5,7 @@ Sistema de estoque em HTML, CSS e JavaScript puros (módulos ES), sem build e se
 ## Como usar
 
 ```bash
-npm start      # serve em http://localhost:8080 (precisa de python3)
+npm start      # serve em http://localhost:8080 (só precisa do Node)
 npm test       # roda os testes das regras de estoque (Node 20+)
 ```
 
