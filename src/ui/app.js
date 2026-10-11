@@ -48,15 +48,28 @@ function renderLogin(msg=''){
   </section>`;
 }
 
+const TEMPO_MAX_MS = 20000;
+const comTempo = (promessa, ms) => Promise.race([promessa,
+  new Promise((_, rej) => setTimeout(() => rej(new Error(`O servidor não respondeu em ${ms/1000} segundos.`)), ms))]);
+
 /** Relê tudo do armazenamento. Em caso de falha, mantém o que já estava na tela. */
-async function refresh(){ state.db = await store.load(); }
+async function refresh(){ state.db = await comTempo(store.load(), TEMPO_MAX_MS); }
+
+const textoRodape = () => store.kind === 'remote'
+  ? 'Os dados ficam salvos na nuvem (Supabase) e aparecem para quem tem acesso. Faça backup em Dados.'
+  : 'Os dados ficam salvos neste navegador. Faça backup em Dados.';
+
+let usuarioAtual = null;
 
 async function startSession(user){
+  usuarioAtual = user;
+  $('.head .sub').textContent = textoRodape();
   $('#user').innerHTML = user ? `${esc(user.email)} · <button class="btn small" data-act="logout">Sair</button>` : '';
   $('#main').innerHTML = '<p class="empty">Carregando…</p>';
   try{ await refresh(); }
-  catch(e){ $('#main').innerHTML = `<p class="alert">Não foi possível carregar os dados: ${esc(msgErro(e))}</p>
-    <p class="hint">Confira se o schema.sql foi executado e se o seu e-mail está em members.</p>`; return; }
+  catch(e){ $('#main').innerHTML = `<section class="card"><p class="alert">Não foi possível carregar os dados: ${esc(msgErro(e))}</p>
+    <p class="hint">Confira a conexão, se o schema.sql foi executado e se o seu e-mail está em members.</p>
+    <div class="actions"><button class="btn" data-act="retry">Tentar de novo</button></div></section>`; return; }
   unsubscribe();
   unsubscribe = store.subscribe(async () => {
     if(busy) return;
@@ -112,6 +125,7 @@ document.addEventListener('click', async e => {
   else if(a==='delP'){ await run(() => excluirProduto(state.db, b.dataset.id)); render(); }
   else if(a==='importCatalogo'){ await run(() => importarCatalogo(state.db, CATALOGO_XDISTRIBUIDORA)); render(); }
   else if(a==='cancelVenda'){ await run(() => cancelarVenda(state.db, b.dataset.id)); render(); }
+  else if(a==='retry'){ await startSession(usuarioAtual); }
   else if(a==='logout'){ unsubscribe(); await store.auth.signOut(); }
   else if(a==='copy'){
     navigator.clipboard.writeText($('#exp').value)

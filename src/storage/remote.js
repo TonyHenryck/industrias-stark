@@ -56,7 +56,9 @@ export function createRemote(client){
     async user(){ const {data} = await client.auth.getSession(); return data.session?.user ?? null; },
     async signIn(email, password){ check(await client.auth.signInWithPassword({email, password})); },
     async signOut(){ await client.auth.signOut(); },
-    onChange(cb){ client.auth.onAuthStateChange((_, session) => cb(session?.user ?? null)); },
+    // O supabase-js chama este aviso segurando o bloqueio interno de autenticação. Consultar o banco
+    // de dentro dele trava para sempre, então o aviso é adiado para depois que o bloqueio for solto.
+    onChange(cb){ client.auth.onAuthStateChange((_, session) => { setTimeout(() => cb(session?.user ?? null), 0); }); },
   };
 
   return {kind:'remote', load, save, subscribe, auth};
