@@ -1,0 +1,63 @@
+import { emptyDb } from '../domain/queries.js';
+import { diffRows } from './diff.js';
+
+const TABLES = ['products', 'units', 'moves'];
+const PAGE = 1000, CHUNK = 500;
+
+const check = ({error}) => { if(error) throw error; };
+const chunks = (arr, n) => Array.from({length: Math.ceil(arr.length/n)}, (_, i) => arr.slice(i*n, (i+1)*n));
+
+/** Armazenamento no Supabase. `client` é o resultado de createClient(). */
+export function createRemote(client){
+  let snap = Object.fromEntries(TABLES.map(t => [t, new Map()]));
+
+  async function fetchAll(table){
+    const rows = [];
+    for(let from = 0; ; from += PAGE){
+      const {data, error} = await client.from(table).select('id,data').order('id').range(from, from + PAGE - 1);
+      if(error) throw error;
+      rows.push(...data);
+      if(data.length < PAGE) return rows;
+    }
+  }
+
+  async function load(){
+    const db = emptyDb(), novo = {};
+    for(const t of TABLES){
+      const rows = await fetchAll(t);
+      db[t] = rows.map(r => r.data);
+      novo[t] = new Map(rows.map(r => [r.id, JSON.stringify(r.data)]));
+    }
+    snap = novo;
+    return db;
+  }
+
+  async function save(db){
+    for(const t of TABLES){
+      const {upserts, deletes} = diffRows(snap[t], db[t]);
+      for(const c of chunks(upserts, CHUNK)) check(await client.from(t).upsert(c, {onConflict:'id'}));
+      for(const c of chunks(deletes, CHUNK)) check(await client.from(t).delete().in('id', c));
+      upserts.forEach(r => snap[t].set(r.id, JSON.stringify(r.data)));
+      deletes.forEach(id => snap[t].delete(id));
+    }
+  }
+
+  /** Chama `cb` quando outra pessoa altera algo. Devolve a função que cancela. */
+  function subscribe(cb){
+    let timer;
+    const ch = client.channel('estoque');
+    for(const t of TABLES)
+      ch.on('postgres_changes', {event:'*', schema:'public', table:t}, () => { clearTimeout(timer); timer = setTimeout(cb, 400); });
+    ch.subscribe();
+    return () => client.removeChannel(ch);
+  }
+
+  const auth = {
+    async user(){ const {data} = await client.auth.getSession(); return data.session?.user ?? null; },
+    async signIn(email, password){ check(await client.auth.signInWithPassword({email, password})); },
+    async signOut(){ await client.auth.signOut(); },
+    onChange(cb){ client.auth.onAuthStateChange((_, session) => cb(session?.user ?? null)); },
+  };
+
+  return {kind:'remote', load, save, subscribe, auth};
+}
