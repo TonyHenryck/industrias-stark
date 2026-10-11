@@ -19,7 +19,14 @@ function toast(msg, err=false){
   toast._t = setTimeout(() => t.className = '', 2800);
 }
 
-const msgErro = e => e?.message || String(e);
+const SQL_LIBERAR = "insert into public.members (user_id)\nselect id from auth.users where email = 'SEU_EMAIL_AQUI'\non conflict do nothing;";
+
+const msgErro = e => {
+  const m = e?.message || String(e);
+  return /row-level security|permission denied/i.test(m)
+    ? 'Sem permissão: este usuário não está liberado no Supabase (tabela members) ou as políticas do schema.sql não foram criadas.'
+    : m;
+};
 
 // Erro inesperado nunca passa em silêncio: aparece na tela e no console.
 window.addEventListener('error', e => toast('Erro inesperado: ' + msgErro(e.error ?? e.message), true));
@@ -66,7 +73,17 @@ async function startSession(user){
   $('.head .sub').textContent = textoRodape();
   $('#user').innerHTML = user ? `${esc(user.email)} · <button class="btn small" data-act="logout">Sair</button>` : '';
   $('#main').innerHTML = '<p class="empty">Carregando…</p>';
-  try{ await refresh(); }
+  try{
+    if(store.auth && !(await comTempo(store.auth.isMember(), TEMPO_MAX_MS))){
+      $('#main').innerHTML = `<section class="card"><h2>Acesso ainda não liberado</h2>
+        <p class="alert">O usuário ${esc(user.email)} entrou, mas ainda não foi liberado para ver os dados.</p>
+        <p class="hint">No Supabase, abra o SQL Editor e rode o comando abaixo com o e-mail certo. Depois clique em Tentar de novo.</p>
+        <textarea rows="4" readonly class="mono">${esc(SQL_LIBERAR)}</textarea>
+        <div class="actions" style="margin-top:8px"><button class="btn" data-act="retry">Tentar de novo</button></div></section>`;
+      return;
+    }
+    await refresh();
+  }
   catch(e){ $('#main').innerHTML = `<section class="card"><p class="alert">Não foi possível carregar os dados: ${esc(msgErro(e))}</p>
     <p class="hint">Confira a conexão, se o schema.sql foi executado e se o seu e-mail está em members.</p>
     <div class="actions"><button class="btn" data-act="retry">Tentar de novo</button></div></section>`; return; }
