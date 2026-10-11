@@ -20,6 +20,10 @@ function toast(msg, err=false){
 
 const msgErro = e => e?.message || String(e);
 
+// Erro inesperado nunca passa em silêncio: aparece na tela e no console.
+window.addEventListener('error', e => toast('Erro inesperado: ' + msgErro(e.error ?? e.message), true));
+window.addEventListener('unhandledrejection', e => toast('Erro inesperado: ' + msgErro(e.reason), true));
+
 function render(){
   state.confirmImport = false;
   $('#tabs').innerHTML = TABS.map(([k,l]) =>
