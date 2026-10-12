@@ -30,6 +30,16 @@ Limite conhecido: se vocês dois confirmarem uma venda no mesmo instante, a últ
 - `units`: cada aparelho individual (`productId`, `serial`, `custo`, `status` = `disponivel` | `vendido` | `baixa`, `entradaId`, `saidaId`, `dataEntrada`, `dataSaida`, `ts`).
 - `moves`: histórico (`entrada`, `venda`, `baixa`, `cancelamento`). Vendas têm `valor`, `custo`, `lucro`, `cliente`, `pagamento`, `cancelada`.
 
+## Abas
+
+Painel (dashboard), Balanço, Unidades, Produtos, Entradas, Vendas, Baixas, Histórico e Dados.
+
+- **Painel:** receita, lucro líquido, despesas e perdas, ticket médio; receita ou lucro por dia (ou por mês em períodos longos); produtos que mais deram lucro; vendas por forma de pagamento; estoque parado há mais tempo; situação por produto.
+- **Balanço:** três visões separadas. *Lucro* = vendas − custo dos aparelhos vendidos − despesas − perdas. *Caixa* = o que entrou (vendas) − o que saiu (compras de produto + despesas). *Dinheiro parado em estoque* = custo dos aparelhos ainda não vendidos. Tem o formulário de despesas.
+- **Formas de pagamento:** Pix, Dinheiro e Maquininha.
+- **Despesas:** Frete, Embalagem, Anúncios, Taxa de cartão, Taxa de Pix e Outros. A compra de produto não é despesa: já é lançada em Entradas e aparece no Balanço como "Produto (compras)".
+- Períodos: todo o período, hoje, últimos 7 dias, este mês e mês anterior.
+
 ## Regras
 
 - Estoque = unidades com `status = disponivel`.
@@ -37,6 +47,7 @@ Limite conhecido: se vocês dois confirmarem uma venda no mesmo instante, a últ
 - Custo de cada venda = soma do custo das unidades que saíram. Lucro = valor − custo.
 - Cancelar venda devolve as unidades ao estoque e cria um registro de `cancelamento`.
 - Toda operação inválida falha sem alterar nada.
+- Venda cancelada não entra em nenhum total. Despesas e vendas são movimentações (`moves`), então não exigem mudança no banco do Supabase.
 
 ## Estrutura
 
@@ -47,7 +58,7 @@ src/
   domain/        regras puras, sem DOM nem storage
     operations.js  produtos, entrada, venda, cancelamento, baixa, backup
     queries.js     estoque, custo médio, situação
-    reports.js     resumo do painel, exportação CSV/JSON
+    reports.js     períodos, balanço, estatísticas, exportação CSV/JSON
     util.js, constants.js, errors.js
   config.js        URL e chave anon do Supabase
   storage/
@@ -59,7 +70,7 @@ supabase/
   schema.sql       tabelas, políticas de acesso e realtime
   ui/
     app.js         eventos e render
-    state.js, format.js, shared.js
+    state.js, format.js, shared.js, charts.js (colunas e barras)
     views/         uma view por aba
 tests/
   domain.test.js   regras de estoque

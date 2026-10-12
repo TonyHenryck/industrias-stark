@@ -2,8 +2,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.js';
 import { DomainError } from '../src/domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo } from '../src/domain/operations.js';
-import { resumo, expText } from '../src/domain/reports.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa } from '../src/domain/operations.js';
+import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo } from '../src/domain/reports.js';
 
 const novoProduto = (db, extra={}) => {
   salvarProduto(db, {nome:'Bip 5', custoPadrao:'200', precoPadrao:'350', minimo:'2', ...extra});
@@ -315,5 +315,173 @@ describe('importação de catálogo', () => {
     const db = emptyDb();
     importarCatalogo(db, cat);
     assert.equal(db.products.length, cat.length);
+  });
+});
+
+
+describe('despesas', () => {
+  test('registra, valida categoria e valor, e exclui', () => {
+    const db = emptyDb();
+    erro(() => addDespesa(db, {categoria:'Café', valor:'10'}), 'categoria');
+    erro(() => addDespesa(db, {categoria:'Frete', valor:''}), 'valor');
+    erro(() => addDespesa(db, {categoria:'Frete', valor:'0'}), 'valor');
+    erro(() => addDespesa(db, {categoria:'Produto', valor:'10'}), 'categoria');  // produto entra por Entradas
+    addDespesa(db, {categoria:'Frete', valor:'25.5', data:'2026-10-05', obs:' Sedex '});
+    assert.equal(db.moves.length, 1);
+    assert.deepEqual([db.moves[0].tipo, db.moves[0].valor, db.moves[0].obs], ['despesa', 25.5, 'Sedex']);
+    assert.equal(excluirDespesa(db, 'nao-existe'), null);
+    assert.equal(excluirDespesa(db, db.moves[0].id), 'Despesa excluída.');
+    assert.equal(db.moves.length, 0);
+  });
+
+  test('excluirDespesa não apaga venda nem entrada', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p);
+    assert.equal(excluirDespesa(db, db.moves[0].id), null);
+    assert.equal(db.moves.length, 1);
+  });
+});
+
+describe('períodos', () => {
+  const ref = '2026-10-12';
+  test('intervalos', () => {
+    assert.deepEqual(intervalo('hoje', ref), [ref, ref]);
+    assert.deepEqual(intervalo('7d', ref), ['2026-10-06', ref]);
+    assert.deepEqual(intervalo('mes', ref), ['2026-10-01', '2026-10-31']);
+    assert.deepEqual(intervalo('mesAnt', ref), ['2026-09-01', '2026-09-30']);
+    assert.deepEqual(intervalo('mesAnt', '2026-01-15'), ['2025-12-01', '2025-12-31']);
+    assert.equal(intervalo('tudo', ref), null);
+  });
+
+  test('noPeriodo respeita as bordas', () => {
+    const m = d => ({data:d});
+    assert.ok(noPeriodo(m('2026-10-06'), '7d', ref));
+    assert.ok(!noPeriodo(m('2026-10-05'), '7d', ref));
+    assert.ok(noPeriodo(m('2026-09-30'), 'mesAnt', ref));
+    assert.ok(!noPeriodo(m('2026-10-01'), 'mesAnt', ref));
+    assert.ok(noPeriodo(m('1999-01-01'), 'tudo', ref));
+  });
+});
+
+describe('balanço', () => {
+  const ref = '2026-10-12';
+  function cenario(){
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'4', custo:'100', data:'2026-10-01'});                       // compra: R$ 400
+    venda(db, p, {qtd:'1', preco:'300', pagamento:'Pix', data:'2026-10-10'});          // custo 100
+    venda(db, p, {qtd:'1', preco:'350', pagamento:'Maquininha', data:'2026-10-11'});   // custo 100
+    addBaixa(db, {produto:p.id, qtd:'1', motivo:'Defeito', data:'2026-10-11'});        // perda 100
+    addDespesa(db, {categoria:'Frete', valor:'20', data:'2026-10-10'});
+    addDespesa(db, {categoria:'Taxa de cartão', valor:'15', data:'2026-10-11'});
+    return {db, p};
+  }
+
+  test('lucro, caixa e estoque parado são visões separadas', () => {
+    const {db} = cenario();
+    const b = balanco(db, 'tudo', ref);
+    assert.equal(b.receita, 650);
+    assert.equal(b.custoVendido, 200);
+    assert.equal(b.lucroBruto, 450);
+    assert.equal(b.perdas, 100);
+    assert.equal(b.despesas, 35);
+    assert.equal(b.lucroLiquido, 315);                 // 450 - 100 - 35
+    assert.equal(b.compras, 400);
+    assert.equal(b.caixaSaiu, 435);                    // compra + despesas
+    assert.equal(b.saldo, 215);                        // 650 - 435
+    assert.equal(b.dinheiroParado, 100);               // 1 aparelho sobrou, custo 100
+  });
+
+  test('vendas por forma de pagamento seguem a ordem Pix, Dinheiro, Maquininha', () => {
+    const {db, p} = cenario();
+    venda(db, p, {qtd:'1', preco:'100', pagamento:'Dinheiro', data:'2026-10-12'});
+    const f = balanco(db, 'tudo', ref).porPagamento;
+    assert.deepEqual(f.map(x => x.forma), ['Pix','Dinheiro','Maquininha']);
+    assert.deepEqual(f.map(x => x.valor), [300, 100, 350]);
+    assert.equal(Math.round(f.reduce((s, x) => s + x.pct, 0)), 100);
+  });
+
+  test('despesas por categoria incluem as compras de produto', () => {
+    const {db} = cenario();
+    const c = balanco(db, 'tudo', ref).porCategoria;
+    assert.deepEqual(c.map(x => x.categoria), ['Produto (compras)', 'Frete', 'Taxa de cartão']);
+    assert.deepEqual(c.map(x => x.valor), [400, 20, 15]);
+  });
+
+  test('o período filtra vendas, despesas e compras; venda cancelada não conta', () => {
+    const {db} = cenario();
+    const hoje7 = balanco(db, 'hoje', '2026-10-11');
+    assert.equal(hoje7.receita, 350);
+    assert.equal(hoje7.despesas, 15);
+    assert.equal(hoje7.compras, 0);
+    cancelarVenda(db, db.moves.find(m => m.tipo === 'venda').id);
+    assert.equal(balanco(db, 'tudo', ref).receita, 350);
+  });
+
+  test('sem nada registrado, tudo zera sem dividir por zero', () => {
+    const b = balanco(emptyDb(), 'tudo', ref);
+    assert.deepEqual([b.receita, b.lucroLiquido, b.margemLiquida, b.saldo], [0, 0, 0, 0]);
+  });
+});
+
+describe('estatísticas', () => {
+  const ref = '2026-10-12';
+  test('série diária inclui os dias sem venda', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'3', custo:'100', data:'2026-10-01'});
+    venda(db, p, {preco:'300', data:'2026-10-10'});
+    venda(db, p, {preco:'200', data:'2026-10-12'});
+    const {mensal, pontos} = serieVendas(db, '7d', ref);
+    assert.equal(mensal, false);
+    assert.equal(pontos.length, 7);
+    assert.deepEqual(pontos.map(x => x.receita), [0, 0, 0, 0, 300, 0, 200]);
+    assert.equal(pontos[4].lucro, 200);
+    assert.equal(pontos[6].rotulo, '12/10');
+  });
+
+  test('em "tudo", passa para mensal quando o intervalo é longo', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2', custo:'100', data:'2026-01-01'});
+    venda(db, p, {preco:'300', data:'2026-01-15'});
+    venda(db, p, {preco:'400', data:'2026-10-02'});
+    const {mensal, pontos} = serieVendas(db, 'tudo', ref);
+    assert.equal(mensal, true);
+    assert.equal(pontos.length, 10);
+    assert.equal(pontos[0].rotulo, '01/2026');
+    assert.equal(pontos[0].receita, 300);
+    assert.equal(pontos[9].receita, 400);
+  });
+
+  test('sem vendas em "tudo", a série vem vazia', () => {
+    assert.deepEqual(serieVendas(emptyDb(), 'tudo', ref).pontos, []);
+  });
+
+  test('top produtos ordena por lucro e calcula a margem', () => {
+    const db = emptyDb(), a = novoProduto(db, {nome:'A'}), b = novoProduto(db, {nome:'B'});
+    entrada(db, a, {qtd:'3', custo:'100'});
+    entrada(db, b, {qtd:'3', custo:'100'});
+    venda(db, a, {qtd:'1', preco:'150'});          // lucro 50
+    venda(db, b, {qtd:'2', preco:'200'});          // receita 400, lucro 200
+    const t = topProdutos(db, 'tudo', ref);
+    assert.deepEqual(t.map(x => x.nome), ['B', 'A']);
+    assert.equal(t[0].margem, 50);
+    assert.equal(t[0].qtd, 2);
+  });
+
+  test('estoque mais antigo conta os dias desde a entrada mais velha disponível', () => {
+    const db = emptyDb(), a = novoProduto(db, {nome:'A'}), b = novoProduto(db, {nome:'B'}), c = novoProduto(db, {nome:'C'});
+    entrada(db, a, {data:'2026-10-02'});
+    entrada(db, a, {data:'2026-10-10'});
+    entrada(db, b, {data:'2026-09-12'});
+    const r = estoqueMaisAntigo(db, ref);
+    assert.deepEqual(r.map(x => [x.nome, x.dias, x.qtd]), [['B', 30, 1], ['A', 10, 2]]);   // C sem estoque fica de fora
+  });
+});
+
+describe('exportação de despesas', () => {
+  test('a despesa vira linha do CSV com a categoria no lugar do produto', () => {
+    const db = emptyDb();
+    addDespesa(db, {categoria:'Anúncios', valor:'50', data:'2026-10-05'});
+    const linha = expText(db, 'csv').split('\n')[1];
+    assert.ok(linha.startsWith('05/10/2026;Despesa;Anúncios;;50,00'));
   });
 });

@@ -2,11 +2,12 @@ import { $, esc } from './format.js';
 import { state } from './state.js';
 import { TABS, VIEWS } from './views/index.js';
 import { ICONS, logo } from './icons.js';
+import { iniciarTips } from './charts.js';
 import { unidadesRows } from './views/unidades.js';
 import { histRows } from './views/historico.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo } from '../domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa } from '../domain/operations.js';
 import { expText } from '../domain/reports.js';
 import { CATALOGO_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
@@ -147,6 +148,7 @@ const FORMS = {
   entrada: f => addEntrada(state.db, f),
   venda:   f => addVenda(state.db, f),
   baixa:   f => addBaixa(state.db, f),
+  despesa: f => addDespesa(state.db, f),
 };
 
 document.addEventListener('click', async e => {
@@ -157,6 +159,8 @@ document.addEventListener('click', async e => {
   else if(a==='cancelEdit'){ state.editId = null; render(); }
   else if(a==='delP'){ await run(() => excluirProduto(state.db, b.dataset.id)); render(); }
   else if(a==='importCatalogo'){ await run(() => importarCatalogo(state.db, CATALOGO_XDISTRIBUIDORA)); render(); }
+  else if(a==='delDespesa'){ await run(() => excluirDespesa(state.db, b.dataset.id)); render(); }
+  else if(a==='metrica'){ state.metrica = b.dataset.v; render(); }
   else if(a==='cancelVenda'){ await run(() => cancelarVenda(state.db, b.dataset.id)); render(); }
   else if(a==='toggleSidebar'){ const r = !document.body.classList.contains('collapsed'); aplicarBarra(r); lembrarBarra(r); }
   else if(a==='retry'){ await startSession(usuarioAtual); }
@@ -200,6 +204,7 @@ document.addEventListener('change', e => {
 
 /* ---------- início ---------- */
 $('#brandLogo').innerHTML = logo('logoMenu');
+iniciarTips();
 aplicarBarra(barraGuardada());
 store = await connect();
 if(!store.auth){
