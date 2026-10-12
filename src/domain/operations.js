@@ -6,6 +6,7 @@
 import { fail } from './errors.js';
 import { uid, str, hoje, fmtDate, parseSeriais, sortUnits } from './util.js';
 import { prod, units, nomeProd, isDb } from './queries.js';
+import { CATEGORIAS_DESPESA } from './constants.js';
 
 const produtoOuFalha = (db, id) => prod(db, id) || fail('Escolha o produto.');
 
@@ -124,6 +125,20 @@ export function addBaixa(db, f){
   db.moves.push({id, tipo:'baixa', data, productId:p.id, qty:q, valor:custo, motivo:f.motivo,
     serials:escolhidas.map(u=>u.serial).filter(Boolean), obs:str(f.obs).trim(), ts:Date.now()});
   return 'Baixa registrada.';
+}
+
+export function addDespesa(db, f){
+  if(!CATEGORIAS_DESPESA.includes(f.categoria)) fail('Escolha a categoria da despesa.');
+  const valor = parseFloat(f.valor);
+  if(isNaN(valor) || valor <= 0) fail('Informe o valor da despesa.');
+  db.moves.push({id:uid(), tipo:'despesa', data:f.data || hoje(), categoria:f.categoria, valor, obs:str(f.obs).trim(), ts:Date.now()});
+  return 'Despesa registrada.';
+}
+
+export function excluirDespesa(db, id){
+  if(!db.moves.some(m => m.id === id && m.tipo === 'despesa')) return null;
+  db.moves = db.moves.filter(m => m.id !== id);
+  return 'Despesa excluída.';
 }
 
 /** Lê o texto de um backup JSON e devolve o db, ou lança DomainError. */

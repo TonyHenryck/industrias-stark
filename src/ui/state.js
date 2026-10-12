@@ -6,6 +6,7 @@ export const state = {
   view: 'painel',
   editId: null,
   periodo: 'tudo',
+  metrica: 'receita',
   confirmImport: false,
   fUnit: {st:'disponivel', pid:'', q:''},
   fHist: {tipo:'', pid:'', q:''},
