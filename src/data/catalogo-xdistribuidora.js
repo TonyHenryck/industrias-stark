@@ -110,3 +110,13 @@ export const CATALOGO_XDISTRIBUIDORA = [
   ...microwear, ...gswear, ...kits, ...promo, ...wearzone, ...fones, ...oculos,
   ...pulseiras1, ...pulseiras2, ...pulseirasPino, ...pulseirasEspeciais, ...outros,
 ];
+
+/** Condições de compra, como o catálogo informa (para o cadastro de fornecedores). */
+export const FORNECEDOR_XDISTRIBUIDORA = {
+  nome: 'XDistribuidora',
+  site: 'xdistribuidora.meuspedidos.com.br (CE) · xdistribuidorasp.meuspedidos.com.br (SP)',
+  pedidoMinimo: '5 peças de smartwatch (pode misturar modelos e cores); só acessórios: R$ 350,00',
+  prazo: 'Envio em até 48 horas',
+  pagamento: 'Pix (valor do pedido). Pedido pelo site e pagamento pelo WhatsApp com um consultor',
+  obs: 'Atacado, com tabela de preços por quantidade. Garantia de 90 dias. Centros de distribuição em Fortaleza e no Brás.',
+};

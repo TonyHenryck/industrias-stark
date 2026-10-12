@@ -3,14 +3,16 @@ import assert from 'node:assert/strict';
 import { diffRows } from '../src/storage/diff.js';
 import { createRemote } from '../src/storage/remote.js';
 import { emptyDb } from '../src/domain/queries.js';
-import { salvarProduto, addEntrada, addVenda } from '../src/domain/operations.js';
+import { salvarProduto, addEntrada, addVenda, salvarCliente, salvarFornecedor } from '../src/domain/operations.js';
 
-function fakeClient(){
-  const tables = {products:new Map(), units:new Map(), moves:new Map()};
+function fakeClient({faltando = []} = {}){
+  const tables = {products:new Map(), units:new Map(), moves:new Map(), customers:new Map(), suppliers:new Map()};
   const calls = [];
+  const semTabela = {code:'PGRST205', message:"Could not find the table 'public.x' in the schema cache"};
   return {tables, calls, from(t){ return {
     select(){ const q = {order(){ return q; },
-      range(a,b){ const rows = [...tables[t].entries()].sort(([x],[y]) => x<y?-1:1).slice(a,b+1).map(([id,data]) => ({id,data}));
+      range(a,b){
+        if(faltando.includes(t)) return Promise.resolve({data:null, error:semTabela}); const rows = [...tables[t].entries()].sort(([x],[y]) => x<y?-1:1).slice(a,b+1).map(([id,data]) => ({id,data}));
         return Promise.resolve({data:rows, error:null}); }}; return q; },
     upsert(rows){ calls.push(['upsert',t,rows.length]); rows.forEach(r => tables[t].set(r.id, r.data)); return Promise.resolve({error:null}); },
     delete(){ return {in(_, ids){ calls.push(['delete',t,ids.length]); ids.forEach(i => tables[t].delete(i)); return Promise.resolve({error:null}); }}; },
@@ -68,4 +70,40 @@ test('remoto: erro do servidor sobe como exceção', async () => {
   const store = createRemote(c);
   const db = emptyDb(); salvarProduto(db, {nome:'A'});
   await assert.rejects(store.save(db), /RLS/);
+});
+
+
+test('remoto: sem as tabelas da etapa 2, o app abre normalmente com listas vazias', async () => {
+  const c = fakeClient({faltando:['customers','suppliers']}), store = createRemote(c);
+  const db = await store.load();
+  assert.deepEqual([db.customers, db.suppliers], [[], []]);
+  salvarProduto(db, {nome:'A'});
+  await store.save(db);                                   // o resto continua gravando
+  assert.equal(c.tables.products.size, 1);
+});
+
+test('remoto: gravar cliente sem a tabela explica o que fazer, sem perder o resto', async () => {
+  const c = fakeClient({faltando:['customers']}), store = createRemote(c);
+  const db = await store.load();
+  salvarCliente(db, {nome:'Maria'});
+  await assert.rejects(store.save(db), /tabela "customers" ainda não existe.*schema\.sql/);
+  assert.equal(c.tables.customers.size, 0);
+});
+
+test('remoto: com as tabelas, clientes e fornecedores são gravados e relidos', async () => {
+  const c = fakeClient(), store = createRemote(c);
+  const db = await store.load();
+  salvarCliente(db, {nome:'Maria', telefone:'85 99999-0000'});
+  salvarFornecedor(db, {nome:'XDistribuidora', prazo:'48 horas'});
+  await store.save(db);
+  assert.equal(c.tables.customers.size, 1);
+  const lido = await createRemote(c).load();
+  assert.equal(lido.customers[0].nome, 'Maria');
+  assert.equal(lido.suppliers[0].prazo, '48 horas');
+});
+
+test('remoto: erro de outra natureza em tabela opcional não é escondido', async () => {
+  const c = fakeClient();
+  c.from = () => ({select(){ const q = {order(){ return q; }, range(){ return Promise.resolve({data:null, error:{code:'42501', message:'permission denied'}}); }}; return q; }});
+  await assert.rejects(createRemote(c).load(), e => /permission denied/.test(e.message));
 });

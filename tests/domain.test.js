@@ -2,8 +2,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.js';
 import { DomainError } from '../src/domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa } from '../src/domain/operations.js';
-import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo } from '../src/domain/reports.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor } from '../src/domain/operations.js';
+import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente } from '../src/domain/reports.js';
 
 const novoProduto = (db, extra={}) => {
   salvarProduto(db, {nome:'Bip 5', custoPadrao:'200', precoPadrao:'350', minimo:'2', ...extra});
@@ -483,5 +483,119 @@ describe('exportação de despesas', () => {
     addDespesa(db, {categoria:'Anúncios', valor:'50', data:'2026-10-05'});
     const linha = expText(db, 'csv').split('\n')[1];
     assert.ok(linha.startsWith('05/10/2026;Despesa;Anúncios;;50,00'));
+  });
+});
+
+
+describe('clientes e fornecedores', () => {
+  test('cadastra, exige nome, não repete nome e edita', () => {
+    const db = emptyDb();
+    erro(() => salvarCliente(db, {nome:'  '}), 'nome do cliente');
+    assert.equal(salvarCliente(db, {nome:' Maria ', telefone:'85 99999-0000'}), 'Cliente cadastrado.');
+    assert.equal(db.customers[0].nome, 'Maria');
+    erro(() => salvarCliente(db, {nome:'maria'}), 'Já existe um cliente');
+    salvarCliente(db, {id:db.customers[0].id, nome:'Maria Silva', telefone:'85 98888-0000'});
+    assert.equal(db.customers.length, 1);
+    assert.equal(db.customers[0].telefone, '85 98888-0000');
+    erro(() => salvarCliente(db, {id:'x', nome:'Outra'}), 'não encontrado');
+  });
+
+  test('editar o próprio cadastro sem mudar o nome não conta como repetido', () => {
+    const db = emptyDb();
+    salvarCliente(db, {nome:'Ana'});
+    assert.doesNotThrow(() => salvarCliente(db, {id:db.customers[0].id, nome:'Ana', obs:'VIP'}));
+    assert.equal(db.customers[0].obs, 'VIP');
+  });
+
+  test('fornecedor guarda as condições de compra', () => {
+    const db = emptyDb();
+    salvarFornecedor(db, {nome:'XDistribuidora', pedidoMinimo:'5 peças', prazo:'48 horas', pagamento:'Pix'});
+    assert.deepEqual([db.suppliers[0].pedidoMinimo, db.suppliers[0].prazo, db.suppliers[0].pagamento], ['5 peças', '48 horas', 'Pix']);
+    erro(() => salvarFornecedor(db, {nome:'xdistribuidora'}), 'Já existe um fornecedor');
+  });
+
+  test('a venda liga o cliente pelo nome; nome novo continua valendo só como texto', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    salvarCliente(db, {nome:'Maria'});
+    entrada(db, p, {qtd:'3'});
+    venda(db, p, {cliente:'MARIA'});
+    venda(db, p, {cliente:'João'});
+    const [v1, v2] = db.moves.filter(m => m.tipo === 'venda');
+    assert.equal(v1.customerId, db.customers[0].id);
+    assert.equal(v2.customerId, undefined);
+    assert.equal(v2.cliente, 'João');
+  });
+
+  test('a entrada liga o fornecedor pelo nome', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    salvarFornecedor(db, {nome:'XDistribuidora'});
+    entrada(db, p, {fornecedor:'xdistribuidora'});
+    entrada(db, p, {fornecedor:'Outro'});
+    const [e1, e2] = db.moves.filter(m => m.tipo === 'entrada');
+    assert.equal(e1.supplierId, db.suppliers[0].id);
+    assert.equal(e2.supplierId, undefined);
+  });
+
+  test('resumo do cliente soma vendas por id e por nome (vendas antigas), sem as canceladas', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'5', custo:'100'});
+    venda(db, p, {cliente:'Maria', preco:'300', data:'2026-10-01'});     // antes do cadastro: só texto
+    salvarCliente(db, {nome:'Maria'});
+    venda(db, p, {cliente:'Maria', preco:'200', data:'2026-10-10'});     // ligada por id
+    venda(db, p, {cliente:'Maria', preco:'500', data:'2026-10-11'});
+    cancelarVenda(db, db.moves.filter(m => m.tipo === 'venda').at(-1).id);
+    venda(db, p, {cliente:'Outra pessoa', preco:'999'});
+    const [r] = resumoClientes(db);
+    assert.deepEqual([r.compras, r.total, r.ticket, r.ultima], [2, 500, 250, '2026-10-10']);
+    assert.equal(comprasDoCliente(db, db.customers[0]).length, 2);
+  });
+
+  test('clientes ordenados por quanto compraram', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    salvarCliente(db, {nome:'A'}); salvarCliente(db, {nome:'B'}); salvarCliente(db, {nome:'C'});
+    entrada(db, p, {qtd:'5'});
+    venda(db, p, {cliente:'B', preco:'300'});
+    venda(db, p, {cliente:'A', preco:'100'});
+    assert.deepEqual(resumoClientes(db).map(c => c.nome), ['B', 'A', 'C']);
+  });
+
+  test('quem mais comprou no período ignora venda sem cliente e junta nomes iguais', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'6', custo:'10'});
+    venda(db, p, {cliente:'Maria', preco:'100', data:'2026-10-10'});
+    venda(db, p, {cliente:'maria', preco:'50', data:'2026-10-11'});
+    venda(db, p, {cliente:'', preco:'900', data:'2026-10-11'});
+    venda(db, p, {cliente:'Zé', preco:'120', data:'2026-09-01'});
+    const t = topClientes(db, 'tudo', '2026-10-12');
+    assert.deepEqual(t.map(x => [x.nome, x.compras, x.total]), [['Zé', 1, 120], ['Maria', 2, 150]].sort((a, b) => b[2] - a[2]));
+    assert.deepEqual(topClientes(db, 'mes', '2026-10-12').map(x => x.nome), ['Maria']);
+  });
+
+  test('resumo do fornecedor soma o que foi comprado', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    salvarFornecedor(db, {nome:'XDistribuidora'});
+    entrada(db, p, {qtd:'5', custo:'100', fornecedor:'XDistribuidora', data:'2026-10-01'});
+    entrada(db, p, {qtd:'2', custo:'110', fornecedor:'xdistribuidora', data:'2026-10-09'});
+    entrada(db, p, {qtd:'9', custo:'1', fornecedor:'Outro'});
+    const [r] = resumoFornecedores(db);
+    assert.deepEqual([r.entradas, r.unidades, r.total, r.ultima], [2, 7, 720, '2026-10-09']);
+  });
+
+  test('excluir mantém o histórico e ignora id inexistente', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    salvarCliente(db, {nome:'Maria'}); salvarFornecedor(db, {nome:'F'});
+    entrada(db, p, {fornecedor:'F'}); venda(db, p, {cliente:'Maria'});
+    assert.equal(excluirCliente(db, 'nao'), null);
+    assert.match(excluirCliente(db, db.customers[0].id), /histórico/);
+    assert.match(excluirFornecedor(db, db.suppliers[0].id), /histórico/);
+    assert.deepEqual([db.customers.length, db.suppliers.length], [0, 0]);
+    assert.equal(db.moves.find(m => m.tipo === 'venda').cliente, 'Maria');
+  });
+
+  test('banco e backup antigos, sem clientes e fornecedores, continuam abrindo', () => {
+    const antigo = {products:[], units:[], moves:[]};
+    const db = parseBackup(JSON.stringify(antigo));
+    assert.deepEqual([db.customers, db.suppliers], [[], []]);
+    assert.doesNotThrow(() => salvarCliente({products:[], units:[], moves:[]}, {nome:'X'}));
   });
 });

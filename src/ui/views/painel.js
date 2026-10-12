@@ -1,6 +1,6 @@
 import { esc, brl, nf, badge } from '../format.js';
 import { stock, avgCost, units, nomeProd, situacao } from '../../domain/queries.js';
-import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo } from '../../domain/reports.js';
+import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, topClientes } from '../../domain/reports.js';
 import { sum } from '../../domain/util.js';
 import { colunas, barras } from '../charts.js';
 import { periodoSelect } from '../shared.js';
@@ -31,6 +31,7 @@ export default ({db, periodo, metrica}) => {
   const {disp, alertas} = resumo(db, periodo);
   const top = topProdutos(db, periodo);
   const antigo = estoqueMaisAntigo(db);
+  const clientes = topClientes(db, periodo);
   const ticket = b.vendasQtd ? b.receita / b.vendasQtd : 0;
 
   const topHtml = top.length ? barras(top.map(t => ({
@@ -58,6 +59,7 @@ export default ({db, periodo, metrica}) => {
     <section class="card"><h2>Produtos que mais deram lucro</h2>${topHtml}</section>
     <section class="card"><h2>Vendas por forma de pagamento</h2>${pagHtml}</section>
   </div>
+  <div class="cols2">
   <section class="card">
     <h2>Estoque parado há mais tempo</h2>
     ${antigo.length ? `<div class="tbl"><table>
@@ -65,6 +67,12 @@ export default ({db, periodo, metrica}) => {
       <tbody>${antigo.map(a => `<tr><td>${esc(a.nome)}</td><td class="r">${a.qtd}</td><td class="r">${a.dias}</td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="empty">Nenhum produto com estoque.</p>'}
   </section>
+  <section class="card">
+    <h2>Quem mais comprou</h2>
+    ${clientes.length ? barras(clientes.map(c => ({rotulo: c.nome, sub: `${nf(c.compras)} compra(s)`, valor: c.total, texto: brl(c.total)})))
+      : '<p class="empty">Informe o cliente ao registrar uma venda para ver o ranking aqui.</p>'}
+  </section>
+  </div>
   <section class="card">
     <h2>Situação por produto</h2>
     ${alertas.length ? `<p class="alert">Atenção: ${alertas.map(p => esc(nomeProd(p))).join(', ')}.</p>` : ''}

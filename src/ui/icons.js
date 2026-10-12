@@ -9,6 +9,8 @@ export const ICONS = {
   entradas:  icon('<path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v3h16v-3"/>'),
   vendas:    icon('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'),
   baixas:    icon('<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>'),
+  clientes:  icon('<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.4c2 .7 3.5 2.7 3.5 5.6"/>'),
+  fornecedores: icon('<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>'),
   historico: icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   dados:     icon('<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>'),
 };

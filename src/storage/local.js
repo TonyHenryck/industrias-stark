@@ -1,11 +1,11 @@
-import { emptyDb, isDb } from '../domain/queries.js';
+import { emptyDb, isDb, normalizar } from '../domain/queries.js';
 
 export const KEY = 'estoque-smartwatch-v1';
 
 function readLocal(){
   try{
     const s = localStorage.getItem(KEY);
-    if(s){ const d = JSON.parse(s); if(isDb(d)) return d; }
+    if(s){ const d = JSON.parse(s); if(isDb(d)) return normalizar(d); }
   }catch(e){}
   return emptyDb();
 }
