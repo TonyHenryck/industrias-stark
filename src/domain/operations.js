@@ -82,6 +82,26 @@ export function excluirFornecedor(db, id){
   return 'Fornecedor excluído. O histórico de entradas continua com o nome dele.';
 }
 
+export const MAX_FOTOS = 3;
+
+/** Guarda o caminho de uma foto já enviada. Devolve null se o produto já tem essa foto. */
+export function adicionarFoto(db, productId, caminho){
+  const p = prod(db, productId) || fail('Produto não encontrado.');
+  p.fotos ??= [];
+  if(p.fotos.includes(caminho)) return null;
+  if(p.fotos.length >= MAX_FOTOS) fail(`Cada produto aceita até ${MAX_FOTOS} fotos. Remova uma para adicionar outra.`);
+  p.fotos.push(caminho);
+  return 'Foto adicionada.';
+}
+
+export function removerFoto(db, productId, caminho){
+  const p = prod(db, productId);
+  const i = p?.fotos?.indexOf(caminho) ?? -1;
+  if(i < 0) return null;
+  p.fotos.splice(i, 1);
+  return 'Foto removida.';
+}
+
 export function excluirProduto(db, id){
   if(db.units.some(u => u.productId===id) || db.moves.some(m => m.productId===id))
     fail('Este produto já tem movimentações. Edite em vez de excluir.');

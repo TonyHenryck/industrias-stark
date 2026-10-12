@@ -75,5 +75,15 @@ export function createRemote(client){
     onChange(cb){ client.auth.onAuthStateChange((_, session) => { setTimeout(() => cb(session?.user ?? null), 0); }); },
   };
 
-  return {kind:'remote', load, save, subscribe, auth};
+  /** Fotos dos produtos no Supabase Storage (espaço "produtos", leitura pública pelo link). */
+  const BUCKET = 'produtos';
+  const fotos = {
+    url: caminho => client.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl,
+    async enviar(caminho, blob){
+      check(await client.storage.from(BUCKET).upload(caminho, blob, {contentType:'image/jpeg', cacheControl:'31536000', upsert:false}));
+    },
+    async remover(caminho){ check(await client.storage.from(BUCKET).remove([caminho])); },
+  };
+
+  return {kind:'remote', load, save, subscribe, auth, fotos};
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.js';
 import { DomainError } from '../src/domain/errors.js';
 import { somaMeses } from '../src/domain/util.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta } from '../src/domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, MAX_FOTOS } from '../src/domain/operations.js';
 import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta } from '../src/domain/reports.js';
 
 const novoProduto = (db, extra={}) => {
@@ -787,5 +787,41 @@ describe('contas a pagar', () => {
     assert.deepEqual(db.bills, []);
     const b = balanco(db, 'tudo', '2026-10-12');
     assert.deepEqual([b.aReceber, b.aPagar, b.caixaEntrou, b.caixaSaiu], [0, 0, 0, 0]);
+  });
+});
+
+
+describe('fotos dos produtos', () => {
+  test('guarda até 3 fotos por produto e recusa a quarta', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    assert.equal(MAX_FOTOS, 3);
+    assert.equal(adicionarFoto(db, p.id, 'a/1.jpg'), 'Foto adicionada.');
+    adicionarFoto(db, p.id, 'a/2.jpg'); adicionarFoto(db, p.id, 'a/3.jpg');
+    erro(() => adicionarFoto(db, p.id, 'a/4.jpg'), 'até 3 fotos');
+    assert.deepEqual(p.fotos, ['a/1.jpg', 'a/2.jpg', 'a/3.jpg']);
+  });
+
+  test('não duplica a mesma foto e exige produto existente', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    adicionarFoto(db, p.id, 'a/1.jpg');
+    assert.equal(adicionarFoto(db, p.id, 'a/1.jpg'), null);
+    assert.equal(p.fotos.length, 1);
+    erro(() => adicionarFoto(db, 'nao', 'x.jpg'), 'não encontrado');
+  });
+
+  test('remover tira só a foto pedida e ignora o que não existe', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    adicionarFoto(db, p.id, 'a/1.jpg'); adicionarFoto(db, p.id, 'a/2.jpg');
+    assert.equal(removerFoto(db, p.id, 'a/1.jpg'), 'Foto removida.');
+    assert.deepEqual(p.fotos, ['a/2.jpg']);
+    assert.equal(removerFoto(db, p.id, 'a/9.jpg'), null);
+    assert.equal(removerFoto(db, 'nao', 'a/2.jpg'), null);
+  });
+
+  test('editar o produto não perde as fotos', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    adicionarFoto(db, p.id, 'a/1.jpg');
+    salvarProduto(db, {id:p.id, nome:'Bip 5 Pro', custoPadrao:'210'});
+    assert.deepEqual(db.products[0].fotos, ['a/1.jpg']);
   });
 });

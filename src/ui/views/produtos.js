@@ -1,14 +1,36 @@
 import { esc, brl } from '../format.js';
 import { prod, stock } from '../../domain/queries.js';
+import { MAX_FOTOS } from '../../domain/operations.js';
 import { datalist } from '../shared.js';
 import { CATALOGO_XDISTRIBUIDORA, CATALOGO_DATA } from '../../data/catalogo-xdistribuidora.js';
 
-export default ({db, editId}) => {
+const thumb = (x, url) => {
+  const c = x.fotos?.[0];
+  return `<td style="width:48px">${c && url ? `<img class="thumb" src="${esc(url(c))}" alt="Foto de ${esc(x.nome)}" loading="lazy">` : '<span class="thumb vazio" aria-hidden="true"></span>'}</td>`;
+};
+
+function painelFotos(p, url){
+  if(!p) return '';
+  if(!url) return `<div class="fotos-box"><h2>Fotos</h2><p class="hint">As fotos ficam guardadas na nuvem e só funcionam com o Supabase configurado.</p></div>`;
+  const fotos = p.fotos || [];
+  return `<div class="fotos-box">
+    <h2>Fotos <small class="sub">(${fotos.length} de ${MAX_FOTOS})</small></h2>
+    <p class="hint">A foto é reduzida antes de enviar, então pode escolher direto da câmera do celular.</p>
+    <div class="fotos">
+      ${fotos.map(c => `<figure class="foto"><a href="${esc(url(c))}" target="_blank" rel="noopener noreferrer"><img src="${esc(url(c))}" alt="Foto de ${esc(p.nome)}" loading="lazy"></a>
+        <button type="button" class="btn small" data-act="delFoto" data-path="${esc(c)}">Remover</button></figure>`).join('')}
+      ${fotos.length < MAX_FOTOS ? `<button type="button" class="foto-add" data-act="pickFoto" aria-label="Adicionar foto"><span>+</span>Adicionar foto</button>` : ''}
+    </div>
+    <input type="file" id="fotoInput" accept="image/*" hidden>
+  </div>`;
+}
+
+export default ({db, editId, fotoUrl}) => {
   const p = editId ? prod(db, editId) : null;
   const v = k => p ? esc(p[k] ?? '') : '';
   const lista = db.products.length ? `<div class="tbl"><table>
-    <thead><tr><th>Modelo</th><th>Marca</th><th>Variante</th><th class="r">Estoque</th><th class="r">Custo padrão</th><th class="r">Preço padrão</th><th>Fornecedor</th><th></th></tr></thead>
-    <tbody>${db.products.map(x => `<tr><td>${esc(x.nome)}</td><td>${esc(x.marca||'')}</td><td>${esc(x.variante||'')}</td>
+    <thead><tr><th></th><th>Modelo</th><th>Marca</th><th>Variante</th><th class="r">Estoque</th><th class="r">Custo padrão</th><th class="r">Preço padrão</th><th>Fornecedor</th><th></th></tr></thead>
+    <tbody>${db.products.map(x => `<tr>${thumb(x, fotoUrl)}<td>${esc(x.nome)}</td><td>${esc(x.marca||'')}</td><td>${esc(x.variante||'')}</td>
       <td class="r">${stock(db, x.id)}</td><td class="r">${brl(x.custoPadrao)}</td><td class="r">${brl(x.precoPadrao)}</td>
       <td>${esc(x.fornecedor||'')}</td>
       <td><div class="acts"><button class="btn small" data-act="editP" data-id="${x.id}">Editar</button>
@@ -38,6 +60,7 @@ export default ({db, editId}) => {
         ${p ? '<button class="btn" type="button" data-act="cancelEdit">Cancelar</button>' : ''}
       </div>
     </form>
+    ${p ? painelFotos(p, fotoUrl) : ''}
   </section>
   <section class="card"><h2>Produtos cadastrados</h2>${lista}</section>`;
 };

@@ -107,3 +107,25 @@ test('remoto: erro de outra natureza em tabela opcional não é escondido', asyn
   c.from = () => ({select(){ const q = {order(){ return q; }, range(){ return Promise.resolve({data:null, error:{code:'42501', message:'permission denied'}}); }}; return q; }});
   await assert.rejects(createRemote(c).load(), e => /permission denied/.test(e.message));
 });
+
+
+test('fotos: envia como JPEG, devolve o endereço público e remove', async () => {
+  const chamadas = [];
+  const c = fakeClient();
+  c.storage = {from(bucket){ return {
+    upload(caminho, blob, opcoes){ chamadas.push(['upload', bucket, caminho, opcoes.contentType, opcoes.upsert]); return Promise.resolve({error:null}); },
+    remove(lista){ chamadas.push(['remove', bucket, lista[0]]); return Promise.resolve({error:null}); },
+    getPublicUrl(caminho){ return {data:{publicUrl:`https://x.supabase.co/storage/v1/object/public/${bucket}/${caminho}`}}; },
+  }; }};
+  const {fotos} = createRemote(c);
+  await fotos.enviar('p1/a.jpg', new Blob(['x']));
+  await fotos.remover('p1/a.jpg');
+  assert.deepEqual(chamadas, [['upload', 'produtos', 'p1/a.jpg', 'image/jpeg', false], ['remove', 'produtos', 'p1/a.jpg']]);
+  assert.equal(fotos.url('p1/a.jpg'), 'https://x.supabase.co/storage/v1/object/public/produtos/p1/a.jpg');
+});
+
+test('fotos: erro do Storage sobe como exceção com a mensagem', async () => {
+  const c = fakeClient();
+  c.storage = {from(){ return {upload: () => Promise.resolve({error:{message:'Bucket not found'}})}; }};
+  await assert.rejects(createRemote(c).fotos.enviar('p/a.jpg', new Blob(['x'])), e => /Bucket not found/.test(e.message));
+});

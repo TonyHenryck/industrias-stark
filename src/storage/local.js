@@ -15,6 +15,7 @@ export function createLocal(){
   return {
     kind: 'local',
     auth: null,
+    fotos: null,                      // fotos precisam do Supabase
     async load(){ return readLocal(); },
     async save(db){ localStorage.setItem(KEY, JSON.stringify(db)); },
     subscribe(){ return () => {}; },

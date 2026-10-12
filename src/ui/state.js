@@ -9,6 +9,7 @@ export const state = {
   editFornecedor: null,
   verCliente: null,
   periodo: 'tudo',
+  fotoUrl: null,            // função caminho -> endereço da foto (só com o Supabase)
   metrica: 'receita',
   contaTipo: 'todas',
   contaStatus: 'pendentes',
