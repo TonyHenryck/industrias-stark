@@ -13,7 +13,7 @@ export function histRows({db, fHist}){
   return `<div class="tbl"><table>
     <thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="r">Qtd</th><th class="r">Valor</th><th>Detalhes</th><th></th></tr></thead>
     <tbody>${list.map(m => {
-      const det = [m.cliente, m.fornecedor, m.motivo, m.pagamento, (m.serials||[]).length ? 'Séries: '+m.serials.join(', ') : '', m.obs]
+      const det = [m.cliente, m.fornecedor, m.motivo, m.pagamento, m.aReceber ? 'A receber' : '', m.aPagar ? 'A pagar' : '', (m.serials||[]).length ? 'Séries: '+m.serials.join(', ') : '', m.obs]
         .filter(Boolean).join(' · ');
       const tipoCls = m.tipo==='baixa' || m.tipo==='despesa' ? 'bad' : m.tipo==='entrada' ? 'ok' : '';
       const acao = m.tipo==='venda' && !m.cancelada ? `<button class="btn small" data-act="cancelVenda" data-id="${m.id}">Cancelar venda</button>` : (m.cancelada ? badge('Cancelada','bad') : '');

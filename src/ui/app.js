@@ -3,12 +3,14 @@ import { state } from './state.js';
 import { TABS, VIEWS } from './views/index.js';
 import { ICONS, logo } from './icons.js';
 import { iniciarTips } from './charts.js';
+import { redimensionar } from './foto.js';
+import { uid } from '../domain/util.js';
 import { unidadesRows } from './views/unidades.js';
 import { histRows } from './views/historico.js';
 import { clientesRows } from './views/clientes.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor } from '../domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto } from '../domain/operations.js';
 import { expText } from '../domain/reports.js';
 import { CATALOGO_XDISTRIBUIDORA, FORNECEDOR_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
@@ -26,6 +28,7 @@ const SQL_LIBERAR = "insert into public.members (user_id)\nselect id from auth.u
 
 const msgErro = e => {
   const m = e?.message || String(e);
+  if(/bucket not found/i.test(m)) return 'O espaço de fotos ainda não existe no Supabase. Rode o arquivo supabase/schema.sql no SQL Editor.';
   return /row-level security|permission denied/i.test(m)
     ? 'Sem permissão: este usuário não está liberado no Supabase (tabela members) ou as políticas do schema.sql não foram criadas.'
     : m;
@@ -136,6 +139,21 @@ async function run(fn){
   }finally{ busy = false; }
 }
 
+/** Reduz a foto, envia para o Supabase e só então a vincula ao produto. */
+async function enviarFoto(arquivo){
+  const pid = state.editId;
+  if(!pid || !store.fotos) return;
+  toast('Enviando a foto…');
+  let caminho;
+  try{
+    const blob = await redimensionar(arquivo);
+    caminho = `${pid}/${uid()}.jpg`;
+    await store.fotos.enviar(caminho, blob);
+  }catch(e){ return toast('Não foi possível enviar a foto: ' + msgErro(e), true); }
+  if(!(await run(() => adicionarFoto(state.db, pid, caminho)))) store.fotos.remover(caminho).catch(() => {});
+  render();
+}
+
 async function importar(btn){
   let d;
   try{ d = parseBackup($('#imp').value); }
@@ -152,6 +170,7 @@ const FORMS = {
   despesa: f => addDespesa(state.db, f),
   cliente: f => salvarCliente(state.db, f),
   fornecedor: f => salvarFornecedor(state.db, f),
+  conta: f => addContaPagar(state.db, f),
 };
 
 document.addEventListener('click', async e => {
@@ -173,6 +192,16 @@ document.addEventListener('click', async e => {
   else if(a==='cancelEditF'){ state.editFornecedor = null; render(); }
   else if(a==='delF'){ await run(() => excluirFornecedor(state.db, b.dataset.id)); render(); }
   else if(a==='addXDist'){ await run(() => salvarFornecedor(state.db, FORNECEDOR_XDISTRIBUIDORA)); render(); }
+  else if(a==='pagarC'){ await run(() => pagarConta(state.db, b.dataset.id)); render(); }
+  else if(a==='desfazerC'){ await run(() => desfazerPagamento(state.db, b.dataset.id)); render(); }
+  else if(a==='delConta'){ await run(() => excluirConta(state.db, b.dataset.id)); render(); }
+  else if(a==='contaTipo'){ state.contaTipo = b.dataset.v; render(); }
+  else if(a==='pickFoto'){ $('#fotoInput').click(); }
+  else if(a==='delFoto'){
+    const caminho = b.dataset.path, pid = state.editId;
+    if(await run(() => removerFoto(state.db, pid, caminho))) store.fotos?.remover(caminho).catch(() => {});   // o arquivo órfão é inofensivo se falhar
+    render();
+  }
   else if(a==='cancelVenda'){ await run(() => cancelarVenda(state.db, b.dataset.id)); render(); }
   else if(a==='toggleSidebar'){ const r = !document.body.classList.contains('collapsed'); aplicarBarra(r); lembrarBarra(r); }
   else if(a==='retry'){ await startSession(usuarioAtual); }
@@ -214,9 +243,15 @@ document.addEventListener('input', e => {
   $(f[1]).innerHTML = f[2](state);
 });
 
-document.addEventListener('change', e => {
+document.addEventListener('change', async e => {
   const t = e.target;
   if(t.id==='per'){ state.periodo = t.value; render(); }
+  if(t.id==='fotoInput' && t.files[0]){ const f = t.files[0]; t.value = ''; await enviarFoto(f); }
+  if(t.id==='contaStatus'){ state.contaStatus = t.value; render(); }
+  if(t.dataset.toggle){                      // mostra os campos de vencimento só quando for a prazo
+    const mostrar = t.value === t.dataset.valor;
+    t.closest('form').querySelectorAll('.' + t.dataset.toggle).forEach(el => { el.hidden = !mostrar; });
+  }
   if(t.id==='expFmt'){ $('#exp').value = expText(state.db, t.value); }
 });
 
@@ -225,6 +260,7 @@ $('#brandLogo').innerHTML = logo('logoMenu');
 iniciarTips();
 aplicarBarra(barraGuardada());
 store = await connect();
+state.fotoUrl = store.fotos ? c => store.fotos.url(c) : null;
 if(!store.auth){
   await startSession(null);
 }else{

@@ -2,8 +2,9 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.js';
 import { DomainError } from '../src/domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor } from '../src/domain/operations.js';
-import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente } from '../src/domain/reports.js';
+import { somaMeses } from '../src/domain/util.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, MAX_FOTOS } from '../src/domain/operations.js';
+import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta } from '../src/domain/reports.js';
 
 const novoProduto = (db, extra={}) => {
   salvarProduto(db, {nome:'Bip 5', custoPadrao:'200', precoPadrao:'350', minimo:'2', ...extra});
@@ -597,5 +598,230 @@ describe('clientes e fornecedores', () => {
     const db = parseBackup(JSON.stringify(antigo));
     assert.deepEqual([db.customers, db.suppliers], [[], []]);
     assert.doesNotThrow(() => salvarCliente({products:[], units:[], moves:[]}, {nome:'X'}));
+  });
+});
+
+
+describe('contas a receber', () => {
+  const ref = '2026-10-12';
+  const vendaAReceber = (db, p, extra = {}) =>
+    venda(db, p, {cliente:'Maria', preco:'300', data:'2026-10-01', recebimento:'receber', vencimento:'2026-10-20', parcelas:'1', ...extra});
+
+  test('somaMeses mantém o dia e respeita meses curtos', () => {
+    assert.equal(somaMeses('2026-01-15', 1), '2026-02-15');
+    assert.equal(somaMeses('2026-01-31', 1), '2026-02-28');
+    assert.equal(somaMeses('2028-01-31', 1), '2028-02-29');
+    assert.equal(somaMeses('2026-11-30', 3), '2027-02-28');
+    assert.equal(somaMeses('2026-12-10', 1), '2027-01-10');
+  });
+
+  test('venda a receber cria as parcelas e a última absorve o centavo', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2', custo:'50'});
+    assert.match(vendaAReceber(db, p, {preco:'100', parcelas:'3', vencimento:'2026-10-31'}), /a receber em 3x/);
+    const b = db.bills;
+    assert.deepEqual(b.map(x => x.valor), [33.33, 33.33, 33.34]);
+    assert.deepEqual(b.map(x => x.vencimento), ['2026-10-31', '2026-11-30', '2026-12-31']);
+    assert.deepEqual(b.map(x => x.parcela), [1, 2, 3]);
+    assert.ok(b.every(x => x.tipo === 'receber' && x.origem === 'venda' && x.status === 'pendente' && x.parte === 'Maria'));
+    assert.equal(db.moves.find(m => m.tipo === 'venda').aReceber, true);
+  });
+
+  test('exige cliente, vencimento válido e parcelas de 1 a 12, sem gravar nada', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2'});
+    erro(() => vendaAReceber(db, p, {cliente:''}), 'cliente');
+    erro(() => vendaAReceber(db, p, {vencimento:''}), 'vencimento');
+    erro(() => vendaAReceber(db, p, {vencimento:'20/10/2026'}), 'vencimento');
+    erro(() => vendaAReceber(db, p, {parcelas:'0'}), 'parcelas');
+    erro(() => vendaAReceber(db, p, {parcelas:'13'}), 'parcelas');
+    assert.equal(stock(db, p.id), 2);
+    assert.equal(db.bills.length, 0);
+    assert.equal(db.moves.filter(m => m.tipo === 'venda').length, 0);
+  });
+
+  test('venda à vista não cria conta', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p);
+    venda(db, p);
+    assert.equal(db.bills.length, 0);
+  });
+
+  test('receber a parcela: o lucro já contava a venda, o caixa só conta agora', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'1', custo:'100', data:'2026-10-01'});
+    vendaAReceber(db, p, {preco:'300'});
+    let b = balanco(db, 'tudo', ref);
+    assert.deepEqual([b.receita, b.lucroBruto], [300, 200]);          // lucro: já reconhecido
+    assert.deepEqual([b.caixaEntrou, b.aReceber], [0, 300]);          // caixa: nada entrou ainda
+    assert.equal(pagarConta(db, db.bills[0].id, '2026-10-12'), 'Recebimento registrado.');
+    b = balanco(db, 'tudo', ref);
+    assert.deepEqual([b.caixaEntrou, b.recebimentos, b.aReceber], [300, 300, 0]);
+  });
+
+  test('o recebimento cai no período em que foi pago, não no da venda', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'1', custo:'100', data:'2026-09-01'});
+    vendaAReceber(db, p, {preco:'300', data:'2026-09-05', vencimento:'2026-10-05'});
+    pagarConta(db, db.bills[0].id, '2026-10-06');
+    assert.equal(balanco(db, 'mesAnt', ref).caixaEntrou, 0);
+    assert.equal(balanco(db, 'mes', ref).caixaEntrou, 300);
+    assert.equal(balanco(db, 'mesAnt', ref).receita, 300);             // a venda é de setembro
+  });
+
+  test('situação: vencida, vence hoje, a vencer e paga', () => {
+    const b = v => ({status:'pendente', vencimento:v});
+    assert.equal(situacaoConta(b('2026-10-11'), ref), 'vencida');
+    assert.equal(situacaoConta(b(ref), ref), 'hoje');
+    assert.equal(situacaoConta(b('2026-10-13'), ref), 'aVencer');
+    assert.equal(situacaoConta({status:'pago', vencimento:'2020-01-01'}, ref), 'pago');
+  });
+
+  test('lista ordenada por vencimento, com totais e vencidos', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'3', custo:'10'});
+    vendaAReceber(db, p, {preco:'100', vencimento:'2026-10-20'});
+    vendaAReceber(db, p, {preco:'200', vencimento:'2026-10-05'});
+    vendaAReceber(db, p, {preco:'50', vencimento:'2026-10-14'});
+    const c = contas(db, {}, ref);
+    assert.deepEqual(c.lista.map(x => x.vencimento), ['2026-10-05', '2026-10-14', '2026-10-20']);
+    assert.deepEqual([c.receber, c.vencidoReceber, c.receber7, c.qtdVencidas], [350, 200, 50, 1]);
+    assert.equal(contas(db, {tipo:'pagar'}, ref).lista.length, 0);
+  });
+
+  test('cancelar a venda cancela as contas e tira o dinheiro do caixa', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'1', custo:'100'});
+    vendaAReceber(db, p, {preco:'300', parcelas:'2', vencimento:'2026-10-20'});
+    pagarConta(db, db.bills[0].id, '2026-10-12');
+    const msg = cancelarVenda(db, db.moves.find(m => m.tipo === 'venda').id);
+    assert.match(msg, /1 parcela\(s\) já tinha\(m\) sido recebida/);
+    assert.ok(db.bills.every(b => b.status === 'cancelada'));
+    assert.equal(contas(db, {status:'todas'}, ref).lista.length, 0);
+    assert.equal(balanco(db, 'tudo', ref).caixaEntrou, 0);
+  });
+
+  test('não paga duas vezes nem conta inexistente; desfazer volta a pendente', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p);
+    vendaAReceber(db, p);
+    const id = db.bills[0].id;
+    pagarConta(db, id);
+    erro(() => pagarConta(db, id), 'não está pendente');
+    erro(() => pagarConta(db, 'x'), 'não encontrada');
+    erro(() => pagarConta(db, desfazerPagamento(db, id) && id, '31/12/2026'), 'inválida');
+    assert.equal(db.bills[0].status, 'pendente');
+    erro(() => desfazerPagamento(db, id), 'não está paga');
+  });
+});
+
+describe('contas a pagar', () => {
+  const ref = '2026-10-12';
+
+  test('entrada a pagar não sai do caixa até ser paga; o custo do estoque já existe', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'4', custo:'100', data:'2026-10-01', fornecedor:'Forn', condicao:'pagar', vencimento:'2026-10-25', parcelas:'2'});
+    assert.deepEqual(db.bills.map(b => [b.tipo, b.valor, b.parte]), [['pagar', 200, 'Forn'], ['pagar', 200, 'Forn']]);
+    assert.equal(stock(db, p.id), 4);
+    let b = balanco(db, 'tudo', ref);
+    assert.deepEqual([b.compras, b.comprasPagas, b.caixaSaiu, b.aPagar], [400, 0, 0, 400]);
+    pagarConta(db, db.bills[0].id, '2026-10-12');
+    b = balanco(db, 'tudo', ref);
+    assert.deepEqual([b.comprasPagas, b.caixaSaiu, b.aPagar], [200, 200, 200]);
+    assert.equal(b.dinheiroParado, 400);                              // estoque continua valendo o custo todo
+  });
+
+  test('entrada a pagar exige vencimento e não grava nada se faltar', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    erro(() => entrada(db, p, {qtd:'2', condicao:'pagar'}), 'vencimento');
+    assert.equal(db.units.length, 0);
+    assert.equal(db.moves.length, 0);
+  });
+
+  test('entrada à vista continua saindo do caixa na hora', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2', custo:'100', data:'2026-10-01', condicao:'pago'});
+    assert.equal(balanco(db, 'tudo', ref).caixaSaiu, 200);
+    assert.equal(db.bills.length, 0);
+  });
+
+  test('conta avulsa vira despesa só quando é paga, na data do pagamento', () => {
+    const db = emptyDb();
+    erro(() => addContaPagar(db, {categoria:'Café', valor:'10', vencimento:'2026-10-20'}), 'categoria');
+    erro(() => addContaPagar(db, {categoria:'Anúncios', valor:'0', vencimento:'2026-10-20'}), 'valor');
+    erro(() => addContaPagar(db, {categoria:'Anúncios', valor:'100'}), 'vencimento');
+    assert.equal(addContaPagar(db, {categoria:'Anúncios', valor:'100', vencimento:'2026-10-20', descricao:'Meta Ads'}), 'Conta a pagar registrada.');
+    assert.equal(db.moves.length, 0);
+    assert.equal(balanco(db, 'tudo', ref).despesas, 0);
+    pagarConta(db, db.bills[0].id, '2026-10-12');
+    const d = db.moves.find(m => m.tipo === 'despesa');
+    assert.deepEqual([d.categoria, d.valor, d.data, d.obs], ['Anúncios', 100, '2026-10-12', 'Meta Ads']);
+    const b = balanco(db, 'tudo', ref);
+    assert.deepEqual([b.despesas, b.caixaSaiu, b.lucroLiquido], [100, 100, -100]);
+  });
+
+  test('desfazer o pagamento remove a despesa gerada', () => {
+    const db = emptyDb();
+    addContaPagar(db, {categoria:'Frete', valor:'30', vencimento:'2026-10-20'});
+    pagarConta(db, db.bills[0].id, '2026-10-12');
+    assert.equal(db.moves.length, 1);
+    desfazerPagamento(db, db.bills[0].id);
+    assert.equal(db.moves.length, 0);
+    assert.equal(db.bills[0].status, 'pendente');
+  });
+
+  test('parcelar conta avulsa; excluir só avulsa e pendente', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    assert.equal(addContaPagar(db, {categoria:'Outros', valor:'90', vencimento:'2026-11-05', parcelas:'3'}), '3 parcelas a pagar registradas.');
+    assert.deepEqual(db.bills.map(b => b.valor), [30, 30, 30]);
+    pagarConta(db, db.bills[0].id);
+    erro(() => excluirConta(db, db.bills[0].id), 'Desfaça o pagamento');
+    assert.equal(excluirConta(db, db.bills[1].id), 'Conta excluída.');
+    assert.equal(excluirConta(db, 'nao'), null);
+    entrada(db, p, {condicao:'pagar', vencimento:'2026-11-05'});
+    erro(() => excluirConta(db, db.bills.find(b => b.origem === 'entrada').id), 'cancele a venda');
+  });
+
+  test('backup antigo sem contas continua abrindo e o caixa não muda', () => {
+    const db = parseBackup(JSON.stringify({products:[], units:[], moves:[]}));
+    assert.deepEqual(db.bills, []);
+    const b = balanco(db, 'tudo', '2026-10-12');
+    assert.deepEqual([b.aReceber, b.aPagar, b.caixaEntrou, b.caixaSaiu], [0, 0, 0, 0]);
+  });
+});
+
+
+describe('fotos dos produtos', () => {
+  test('guarda até 3 fotos por produto e recusa a quarta', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    assert.equal(MAX_FOTOS, 3);
+    assert.equal(adicionarFoto(db, p.id, 'a/1.jpg'), 'Foto adicionada.');
+    adicionarFoto(db, p.id, 'a/2.jpg'); adicionarFoto(db, p.id, 'a/3.jpg');
+    erro(() => adicionarFoto(db, p.id, 'a/4.jpg'), 'até 3 fotos');
+    assert.deepEqual(p.fotos, ['a/1.jpg', 'a/2.jpg', 'a/3.jpg']);
+  });
+
+  test('não duplica a mesma foto e exige produto existente', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    adicionarFoto(db, p.id, 'a/1.jpg');
+    assert.equal(adicionarFoto(db, p.id, 'a/1.jpg'), null);
+    assert.equal(p.fotos.length, 1);
+    erro(() => adicionarFoto(db, 'nao', 'x.jpg'), 'não encontrado');
+  });
+
+  test('remover tira só a foto pedida e ignora o que não existe', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    adicionarFoto(db, p.id, 'a/1.jpg'); adicionarFoto(db, p.id, 'a/2.jpg');
+    assert.equal(removerFoto(db, p.id, 'a/1.jpg'), 'Foto removida.');
+    assert.deepEqual(p.fotos, ['a/2.jpg']);
+    assert.equal(removerFoto(db, p.id, 'a/9.jpg'), null);
+    assert.equal(removerFoto(db, 'nao', 'a/2.jpg'), null);
+  });
+
+  test('editar o produto não perde as fotos', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    adicionarFoto(db, p.id, 'a/1.jpg');
+    salvarProduto(db, {id:p.id, nome:'Bip 5 Pro', custoPadrao:'210'});
+    assert.deepEqual(db.products[0].fotos, ['a/1.jpg']);
   });
 });

@@ -1,9 +1,9 @@
 import { emptyDb } from '../domain/queries.js';
 import { diffRows } from './diff.js';
 
-const TABLES = ['products', 'units', 'moves', 'customers', 'suppliers'];
-/** Tabelas da etapa 2: se ainda não existem no Supabase, o app abre sem elas em vez de quebrar. */
-const OPCIONAIS = ['customers', 'suppliers'];
+const TABLES = ['products', 'units', 'moves', 'customers', 'suppliers', 'bills'];
+/** Tabelas das etapas 2 e 3 (clientes, fornecedores e contas): se ainda não existem no Supabase, o app abre sem elas em vez de quebrar. */
+const OPCIONAIS = ['customers', 'suppliers', 'bills'];
 const tabelaAusente = e => /PGRST205|42P01|schema cache|does not exist/i.test(`${e?.code} ${e?.message}`);
 const PAGE = 1000, CHUNK = 500;
 
@@ -75,5 +75,15 @@ export function createRemote(client){
     onChange(cb){ client.auth.onAuthStateChange((_, session) => { setTimeout(() => cb(session?.user ?? null), 0); }); },
   };
 
-  return {kind:'remote', load, save, subscribe, auth};
+  /** Fotos dos produtos no Supabase Storage (espaço "produtos", leitura pública pelo link). */
+  const BUCKET = 'produtos';
+  const fotos = {
+    url: caminho => client.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl,
+    async enviar(caminho, blob){
+      check(await client.storage.from(BUCKET).upload(caminho, blob, {contentType:'image/jpeg', cacheControl:'31536000', upsert:false}));
+    },
+    async remover(caminho){ check(await client.storage.from(BUCKET).remove([caminho])); },
+  };
+
+  return {kind:'remote', load, save, subscribe, auth, fotos};
 }

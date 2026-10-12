@@ -27,12 +27,15 @@ export default ({db, periodo}) => {
 
   const caixa = `<section class="card">
     <h2>Caixa do período</h2>
-    <p class="hint">O dinheiro que entrou e saiu. Comprar aparelhos baixa o caixa, mas não é prejuízo: o dinheiro vira estoque.</p>
-    ${linha('Entrou (vendas)', b.caixaEntrou)}
-    ${linha('Compras de produto', b.compras, {sinal: '−'})}
+    <p class="hint">O dinheiro que de fato entrou e saiu. Venda a receber só entra quando a parcela é recebida; compra a prazo só sai quando é paga. Comprar aparelhos baixa o caixa, mas não é prejuízo: o dinheiro vira estoque.</p>
+    ${linha('Vendas recebidas à vista', b.vendasAVista)}
+    ${linha('Parcelas recebidas', b.recebimentos)}
+    ${linha('Compras de produto pagas', b.comprasPagas, {sinal: '−'})}
     ${linha('Despesas', b.despesas, {sinal: '−'})}
     ${linha('Saldo do caixa', b.saldo, {total: true, neg: b.saldo < 0})}
     <div class="st-sep"></div>
+    ${linha('A receber (em aberto)', b.aReceber, {dica: b.vencidoReceber ? `${brl(b.vencidoReceber)} já venceu` : ''})}
+    ${linha('A pagar (em aberto)', b.aPagar, {dica: b.vencidoPagar ? `${brl(b.vencidoPagar)} já venceu` : ''})}
     ${linha('Dinheiro parado em estoque', b.dinheiroParado, {dica: 'Custo dos aparelhos que ainda não foram vendidos (hoje).'})}
   </section>`;
 
@@ -54,8 +57,8 @@ export default ({db, periodo}) => {
   ${periodoSelect(periodo)}
   <div class="cols2">${resultado}${caixa}</div>
   <div class="cols2">
-    <section class="card"><h2>Entradas por forma de pagamento</h2>${pag}</section>
-    <section class="card"><h2>Para onde foi o dinheiro</h2>${cat}</section>
+    <section class="card"><h2>Vendas por forma de pagamento</h2>${pag}</section>
+    <section class="card"><h2>Gastos por categoria</h2>${cat}</section>
   </div>
   <section class="card">
     <h2>Registrar despesa</h2>

@@ -1,6 +1,6 @@
 import { esc, brl, nf, badge } from '../format.js';
 import { stock, avgCost, units, nomeProd, situacao } from '../../domain/queries.js';
-import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, topClientes } from '../../domain/reports.js';
+import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas } from '../../domain/reports.js';
 import { sum } from '../../domain/util.js';
 import { colunas, barras } from '../charts.js';
 import { periodoSelect } from '../shared.js';
@@ -32,6 +32,7 @@ export default ({db, periodo, metrica}) => {
   const top = topProdutos(db, periodo);
   const antigo = estoqueMaisAntigo(db);
   const clientes = topClientes(db, periodo);
+  const ct = contas(db);
   const ticket = b.vendasQtd ? b.receita / b.vendasQtd : 0;
 
   const topHtml = top.length ? barras(top.map(t => ({
@@ -46,6 +47,9 @@ export default ({db, periodo, metrica}) => {
   const semEntrada = db.products.length - comEntrada.length;
 
   return `
+  ${ct.qtdVencidas ? `<section class="card aviso">
+    <p><strong>${ct.qtdVencidas} conta(s) vencida(s)</strong>${ct.vencidoReceber ? ` · a receber ${brl(ct.vencidoReceber)}` : ''}${ct.vencidoPagar ? ` · a pagar ${brl(ct.vencidoPagar)}` : ''}</p>
+    <button class="btn small" data-act="go" data-v="contas">Ver contas</button></section>` : ''}
   ${periodoSelect(periodo)}
   <div class="kpis">
     ${kpi('Em estoque', `${nf(disp.length)} un.`, `Custo ${brl(b.dinheiroParado)}`)}

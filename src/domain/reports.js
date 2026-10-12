@@ -78,7 +78,18 @@ export function balanco(db, periodo, ref = hoje()){
   const lucroBruto = receita - custoVendido;
   const perdas = sum(baixas, 'valor'), gastos = sum(despesas, 'valor'), compras = sum(entradas, 'valor');
   const lucroLiquido = lucroBruto - perdas - gastos;
-  const saiu = compras + gastos;
+
+  // Caixa: venda a receber só entra quando a parcela é recebida; compra a pagar só sai quando é paga.
+  const pagas = (db.bills || []).filter(b => b.status === 'pago' && no({data:b.dataPagamento}));
+  const vendaViva = id => db.moves.some(m => m.id === id && m.tipo === 'venda' && !m.cancelada);
+  const vendasAVista = sum(vendas.filter(v => !v.aReceber), 'valor');
+  const recebimentos = sum(pagas.filter(b => b.tipo === 'receber' && vendaViva(b.moveId)), 'valor');
+  const comprasAVista = sum(entradas.filter(e => !e.aPagar), 'valor');
+  const comprasPagas = comprasAVista + sum(pagas.filter(b => b.tipo === 'pagar' && b.origem === 'entrada'), 'valor');
+  const entrou = vendasAVista + recebimentos, saiu = comprasPagas + gastos;
+  const pendentes = (db.bills || []).filter(b => b.status === 'pendente');
+  const emAberto = tipo => sum(pendentes.filter(b => b.tipo === tipo), 'valor');
+  const vencido = tipo => sum(pendentes.filter(b => b.tipo === tipo && b.vencimento < ref), 'valor');
 
   const porPagamento = agrupar(vendas, v => v.pagamento || 'Não informado', v => v.valor)
     .map(a => ({forma:a.chave, qtd:a.qtd, valor:a.valor, pct: receita ? a.valor / receita * 100 : 0}))
@@ -91,9 +102,39 @@ export function balanco(db, periodo, ref = hoje()){
   return {
     vendasQtd: vendas.length, receita, custoVendido, lucroBruto, perdas, despesas: gastos, lucroLiquido,
     margemLiquida: receita ? lucroLiquido / receita * 100 : 0,
-    compras, caixaEntrou: receita, caixaSaiu: saiu, saldo: receita - saiu,
+    compras, comprasPagas, vendasAVista, recebimentos,
+    caixaEntrou: entrou, caixaSaiu: saiu, saldo: entrou - saiu,
+    aReceber: emAberto('receber'), aPagar: emAberto('pagar'), vencidoReceber: vencido('receber'), vencidoPagar: vencido('pagar'),
     dinheiroParado: sum(db.units.filter(u => u.status === 'disponivel'), 'custo'),
     porPagamento, porCategoria, listaDespesas: despesas.slice().sort((a, b) => b.ts - a.ts),
+  };
+}
+
+/* ---------- contas a receber e a pagar ---------- */
+
+/** 'pago' | 'vencida' | 'hoje' | 'aVencer' (contas canceladas não entram nas listas). */
+export const situacaoConta = (b, ref = hoje()) =>
+  b.status === 'pago' ? 'pago' : b.vencimento < ref ? 'vencida' : b.vencimento === ref ? 'hoje' : 'aVencer';
+
+/**
+ * Contas ordenadas por vencimento. `tipo`: 'receber' | 'pagar' | 'todas'; `status`: 'pendentes' | 'pagas' | 'todas'.
+ * Também devolve os totais em aberto, vencidos e dos próximos 7 dias.
+ */
+export function contas(db, {tipo = 'todas', status = 'pendentes'} = {}, ref = hoje()){
+  const todas = (db.bills || []).filter(b => b.status !== 'cancelada');
+  const lista = todas
+    .filter(b => (tipo === 'todas' || b.tipo === tipo) && (status === 'todas' || (status === 'pagas' ? b.status === 'pago' : b.status === 'pendente')))
+    .map(b => ({...b, situacao: situacaoConta(b, ref)}))
+    .sort((a, b) => status === 'pagas' ? b.dataPagamento.localeCompare(a.dataPagamento) : a.vencimento.localeCompare(b.vencimento) || a.ts - b.ts);
+  const pend = todas.filter(b => b.status === 'pendente'), fim7 = somaDias(ref, 7);
+  const tot = (t, f = () => true) => sum(pend.filter(b => b.tipo === t && f(b)), 'valor');
+  return {
+    lista,
+    receber: tot('receber'), pagar: tot('pagar'),
+    vencidoReceber: tot('receber', b => b.vencimento < ref), vencidoPagar: tot('pagar', b => b.vencimento < ref),
+    receber7: tot('receber', b => b.vencimento >= ref && b.vencimento <= fim7),
+    pagar7: tot('pagar', b => b.vencimento >= ref && b.vencimento <= fim7),
+    qtdVencidas: pend.filter(b => b.vencimento < ref).length,
   };
 }
 
