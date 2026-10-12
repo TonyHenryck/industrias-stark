@@ -1,5 +1,5 @@
 -- Pode ser rodado inteiro, quantas vezes precisar, no SQL Editor do Supabase.
--- Cada registro do sistema (produto, unidade, movimentação, cliente, fornecedor) é uma linha com o JSON em `data`.
+-- Cada registro do sistema (produto, unidade, movimentação, cliente, fornecedor, conta) é uma linha com o JSON em `data`.
 
 create table if not exists public.members (
   user_id uuid primary key references auth.users(id) on delete cascade
@@ -16,11 +16,12 @@ create table if not exists public.units     (id text primary key, data jsonb not
 create table if not exists public.moves     (id text primary key, data jsonb not null);
 create table if not exists public.customers (id text primary key, data jsonb not null);
 create table if not exists public.suppliers (id text primary key, data jsonb not null);
+create table if not exists public.bills     (id text primary key, data jsonb not null);
 
 do $$
 declare t text;
 begin
-  foreach t in array array['products','units','moves','customers','suppliers'] loop
+  foreach t in array array['products','units','moves','customers','suppliers','bills'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "membros" on public.%I', t);
     execute format('create policy "membros" on public.%I for all to authenticated using (public.is_member()) with check (public.is_member())', t);

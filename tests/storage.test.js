@@ -6,7 +6,7 @@ import { emptyDb } from '../src/domain/queries.js';
 import { salvarProduto, addEntrada, addVenda, salvarCliente, salvarFornecedor } from '../src/domain/operations.js';
 
 function fakeClient({faltando = []} = {}){
-  const tables = {products:new Map(), units:new Map(), moves:new Map(), customers:new Map(), suppliers:new Map()};
+  const tables = {products:new Map(), units:new Map(), moves:new Map(), customers:new Map(), suppliers:new Map(), bills:new Map()};
   const calls = [];
   const semTabela = {code:'PGRST205', message:"Could not find the table 'public.x' in the schema cache"};
   return {tables, calls, from(t){ return {

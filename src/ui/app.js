@@ -8,7 +8,7 @@ import { histRows } from './views/historico.js';
 import { clientesRows } from './views/clientes.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor } from '../domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta } from '../domain/operations.js';
 import { expText } from '../domain/reports.js';
 import { CATALOGO_XDISTRIBUIDORA, FORNECEDOR_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
@@ -152,6 +152,7 @@ const FORMS = {
   despesa: f => addDespesa(state.db, f),
   cliente: f => salvarCliente(state.db, f),
   fornecedor: f => salvarFornecedor(state.db, f),
+  conta: f => addContaPagar(state.db, f),
 };
 
 document.addEventListener('click', async e => {
@@ -173,6 +174,10 @@ document.addEventListener('click', async e => {
   else if(a==='cancelEditF'){ state.editFornecedor = null; render(); }
   else if(a==='delF'){ await run(() => excluirFornecedor(state.db, b.dataset.id)); render(); }
   else if(a==='addXDist'){ await run(() => salvarFornecedor(state.db, FORNECEDOR_XDISTRIBUIDORA)); render(); }
+  else if(a==='pagarC'){ await run(() => pagarConta(state.db, b.dataset.id)); render(); }
+  else if(a==='desfazerC'){ await run(() => desfazerPagamento(state.db, b.dataset.id)); render(); }
+  else if(a==='delConta'){ await run(() => excluirConta(state.db, b.dataset.id)); render(); }
+  else if(a==='contaTipo'){ state.contaTipo = b.dataset.v; render(); }
   else if(a==='cancelVenda'){ await run(() => cancelarVenda(state.db, b.dataset.id)); render(); }
   else if(a==='toggleSidebar'){ const r = !document.body.classList.contains('collapsed'); aplicarBarra(r); lembrarBarra(r); }
   else if(a==='retry'){ await startSession(usuarioAtual); }
@@ -217,6 +222,11 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if(t.id==='per'){ state.periodo = t.value; render(); }
+  if(t.id==='contaStatus'){ state.contaStatus = t.value; render(); }
+  if(t.dataset.toggle){                      // mostra os campos de vencimento só quando for a prazo
+    const mostrar = t.value === t.dataset.valor;
+    t.closest('form').querySelectorAll('.' + t.dataset.toggle).forEach(el => { el.hidden = !mostrar; });
+  }
   if(t.id==='expFmt'){ $('#exp').value = expText(state.db, t.value); }
 });
 

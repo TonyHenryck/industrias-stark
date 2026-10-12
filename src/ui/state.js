@@ -10,6 +10,8 @@ export const state = {
   verCliente: null,
   periodo: 'tudo',
   metrica: 'receita',
+  contaTipo: 'todas',
+  contaStatus: 'pendentes',
   confirmImport: false,
   fUnit: {st:'disponivel', pid:'', q:''},
   fHist: {tipo:'', pid:'', q:''},

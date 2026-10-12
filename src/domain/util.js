@@ -16,3 +16,13 @@ export const fmtDate = iso => {
 /** Ordem FIFO: data de entrada, depois ordem de cadastro. */
 export const sortUnits = arr => arr.slice().sort((a,b) =>
   a.dataEntrada < b.dataEntrada ? -1 : a.dataEntrada > b.dataEntrada ? 1 : (a.ts||0)-(b.ts||0));
+
+export const arred = n => Math.round(n * 100) / 100;
+export const dataValida = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) && !isNaN(new Date(s + 'T00:00:00Z'));
+
+/** Soma meses mantendo o dia; se o mês de destino for mais curto, usa o último dia (31/01 + 1 mês = 28/02). */
+export const somaMeses = (iso, n) => {
+  const [y, m, d] = iso.split('-').map(Number), t = y * 12 + (m - 1) + n;
+  const ny = Math.floor(t / 12), nm = t % 12, ultimo = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+  return `${ny}-${String(nm + 1).padStart(2, '0')}-${String(Math.min(d, ultimo)).padStart(2, '0')}`;
+};

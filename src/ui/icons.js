@@ -4,6 +4,7 @@ const icon = inner => `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg
 export const ICONS = {
   painel:    icon('<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>'),
   balanco:   icon('<path d="M4 7a2 2 0 0 1 2-2h11v4"/><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 14h2"/>'),
+  contas:    icon('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>'),
   unidades:  icon('<rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3"/>'),
   produtos:  icon('<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>'),
   entradas:  icon('<path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v3h16v-3"/>'),

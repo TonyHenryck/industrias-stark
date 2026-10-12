@@ -1,6 +1,6 @@
 import { esc, brl, opt, badge, fmtDate } from '../format.js';
 import { prod, nomeProd } from '../../domain/queries.js';
-import { hoje } from '../../domain/util.js';
+import { hoje, somaMeses } from '../../domain/util.js';
 import { PAGTOS, MOTIVOS } from '../../domain/constants.js';
 import { prodOpts, datalist } from '../shared.js';
 
@@ -26,6 +26,9 @@ export const entradas = ({db}) => `
       <label>Quantidade<input name="qtd" type="number" min="1" value="1"></label>
       <label>Custo unitário (R$)<input name="custo" type="number" step="0.01" min="0" placeholder="Padrão do produto"></label>
       <label>Fornecedor<input name="fornecedor" list="listaFornecedores" autocomplete="off">${datalist('listaFornecedores', db.suppliers)}</label>
+      <label>Pagamento da compra<select name="condicao" data-toggle="rec-extra" data-valor="pagar">${opt('pago','Pago agora','pago')}${opt('pagar','A pagar (a prazo)','pago')}</select></label>
+      <label class="rec-extra" hidden>Primeiro vencimento*<input name="vencimento" type="date" value="${somaMeses(hoje(), 1)}"></label>
+      <label class="rec-extra" hidden>Parcelas<input name="parcelas" type="number" min="1" max="12" value="1"></label>
       <label class="wide">Números de série (opcional)<textarea name="seriais" rows="3" placeholder="Um por linha"></textarea></label>
       <label class="wide">Observações<input name="obs"></label>
       <div class="actions wide"><button class="btn primary" type="submit">Registrar entrada</button></div>
@@ -56,6 +59,9 @@ export const vendas = ({db}) => `
       <label>Preço unitário (R$)*<input name="preco" type="number" step="0.01" min="0" required></label>
       <label>Cliente<input name="cliente" list="listaClientes" autocomplete="off">${datalist('listaClientes', db.customers)}</label>
       <label>Forma de pagamento<select name="pagamento">${PAGTOS.map(p=>opt(p,p,'')).join('')}</select></label>
+      <label>Recebimento<select name="recebimento" data-toggle="rec-extra" data-valor="receber">${opt('avista','À vista (já recebi)','avista')}${opt('receber','A receber (fiado ou parcelado)','avista')}</select></label>
+      <label class="rec-extra" hidden>Primeiro vencimento*<input name="vencimento" type="date" value="${somaMeses(hoje(), 1)}"></label>
+      <label class="rec-extra" hidden>Parcelas<input name="parcelas" type="number" min="1" max="12" value="1"></label>
       <label class="wide">Números de série (opcional)<textarea name="seriais" rows="2" placeholder="Um por linha"></textarea></label>
       <label class="wide">Observações<input name="obs"></label>
       <div class="actions wide"><button class="btn primary" type="submit">Registrar venda</button></div>
