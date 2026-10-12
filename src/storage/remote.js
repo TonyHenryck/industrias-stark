@@ -1,7 +1,10 @@
 import { emptyDb } from '../domain/queries.js';
 import { diffRows } from './diff.js';
 
-const TABLES = ['products', 'units', 'moves'];
+const TABLES = ['products', 'units', 'moves', 'customers', 'suppliers'];
+/** Tabelas da etapa 2: se ainda não existem no Supabase, o app abre sem elas em vez de quebrar. */
+const OPCIONAIS = ['customers', 'suppliers'];
+const tabelaAusente = e => /PGRST205|42P01|schema cache|does not exist/i.test(`${e?.code} ${e?.message}`);
 const PAGE = 1000, CHUNK = 500;
 
 const check = ({error}) => { if(error) throw error; };
@@ -10,6 +13,7 @@ const chunks = (arr, n) => Array.from({length: Math.ceil(arr.length/n)}, (_, i) 
 /** Armazenamento no Supabase. `client` é o resultado de createClient(). */
 export function createRemote(client){
   let snap = Object.fromEntries(TABLES.map(t => [t, new Map()]));
+  const ausentes = new Set();
 
   async function fetchAll(table){
     const rows = [];
@@ -23,8 +27,11 @@ export function createRemote(client){
 
   async function load(){
     const db = emptyDb(), novo = {};
+    ausentes.clear();
     for(const t of TABLES){
-      const rows = await fetchAll(t);
+      let rows = [];
+      try{ rows = await fetchAll(t); }
+      catch(e){ if(OPCIONAIS.includes(t) && tabelaAusente(e)) ausentes.add(t); else throw e; }
       db[t] = rows.map(r => r.data);
       novo[t] = new Map(rows.map(r => [r.id, JSON.stringify(r.data)]));
     }
@@ -34,7 +41,12 @@ export function createRemote(client){
 
   async function save(db){
     for(const t of TABLES){
-      const {upserts, deletes} = diffRows(snap[t], db[t]);
+      const {upserts, deletes} = diffRows(snap[t], db[t] || []);
+      if(ausentes.has(t)){
+        if(upserts.length || deletes.length)
+          throw new Error(`A tabela "${t}" ainda não existe no Supabase. Rode o arquivo supabase/schema.sql no SQL Editor e tente de novo.`);
+        continue;
+      }
       for(const c of chunks(upserts, CHUNK)) check(await client.from(t).upsert(c, {onConflict:'id'}));
       for(const c of chunks(deletes, CHUNK)) check(await client.from(t).delete().in('id', c));
       upserts.forEach(r => snap[t].set(r.id, JSON.stringify(r.data)));
@@ -46,7 +58,7 @@ export function createRemote(client){
   function subscribe(cb){
     let timer;
     const ch = client.channel('estoque');
-    for(const t of TABLES)
+    for(const t of TABLES.filter(x => !ausentes.has(x)))
       ch.on('postgres_changes', {event:'*', schema:'public', table:t}, () => { clearTimeout(timer); timer = setTimeout(cb, 400); });
     ch.subscribe();
     return () => client.removeChannel(ch);

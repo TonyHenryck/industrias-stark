@@ -5,9 +5,13 @@ export const state = {
   db: emptyDb(),
   view: 'painel',
   editId: null,
+  editCliente: null,
+  editFornecedor: null,
+  verCliente: null,
   periodo: 'tudo',
   metrica: 'receita',
   confirmImport: false,
   fUnit: {st:'disponivel', pid:'', q:''},
   fHist: {tipo:'', pid:'', q:''},
+  fCliente: {q:''},
 };

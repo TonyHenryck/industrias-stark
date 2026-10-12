@@ -5,11 +5,12 @@ import { ICONS, logo } from './icons.js';
 import { iniciarTips } from './charts.js';
 import { unidadesRows } from './views/unidades.js';
 import { histRows } from './views/historico.js';
+import { clientesRows } from './views/clientes.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa } from '../domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor } from '../domain/operations.js';
 import { expText } from '../domain/reports.js';
-import { CATALOGO_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
+import { CATALOGO_XDISTRIBUIDORA, FORNECEDOR_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
 let store, unsubscribe = () => {}, busy = false;
 
@@ -149,18 +150,29 @@ const FORMS = {
   venda:   f => addVenda(state.db, f),
   baixa:   f => addBaixa(state.db, f),
   despesa: f => addDespesa(state.db, f),
+  cliente: f => salvarCliente(state.db, f),
+  fornecedor: f => salvarFornecedor(state.db, f),
 };
 
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
-  if(a==='go'){ state.view = b.dataset.v; state.editId = null; render(true); window.scrollTo(0,0); }
+  if(a==='go'){ state.view = b.dataset.v; state.editId = state.editCliente = state.editFornecedor = state.verCliente = null; render(true); window.scrollTo(0,0); }
   else if(a==='editP'){ state.editId = b.dataset.id; state.view = 'produtos'; render(); window.scrollTo(0,0); }
   else if(a==='cancelEdit'){ state.editId = null; render(); }
   else if(a==='delP'){ await run(() => excluirProduto(state.db, b.dataset.id)); render(); }
   else if(a==='importCatalogo'){ await run(() => importarCatalogo(state.db, CATALOGO_XDISTRIBUIDORA)); render(); }
   else if(a==='delDespesa'){ await run(() => excluirDespesa(state.db, b.dataset.id)); render(); }
   else if(a==='metrica'){ state.metrica = b.dataset.v; render(); }
+  else if(a==='editC'){ state.editCliente = b.dataset.id; render(); window.scrollTo(0,0); }
+  else if(a==='cancelEditC'){ state.editCliente = null; render(); }
+  else if(a==='verC'){ state.verCliente = b.dataset.id; render(); window.scrollTo(0,0); }
+  else if(a==='closeVerC'){ state.verCliente = null; render(); }
+  else if(a==='delC'){ if(state.verCliente === b.dataset.id) state.verCliente = null; await run(() => excluirCliente(state.db, b.dataset.id)); render(); }
+  else if(a==='editF'){ state.editFornecedor = b.dataset.id; render(); window.scrollTo(0,0); }
+  else if(a==='cancelEditF'){ state.editFornecedor = null; render(); }
+  else if(a==='delF'){ await run(() => excluirFornecedor(state.db, b.dataset.id)); render(); }
+  else if(a==='addXDist'){ await run(() => salvarFornecedor(state.db, FORNECEDOR_XDISTRIBUIDORA)); render(); }
   else if(a==='cancelVenda'){ await run(() => cancelarVenda(state.db, b.dataset.id)); render(); }
   else if(a==='toggleSidebar'){ const r = !document.body.classList.contains('collapsed'); aplicarBarra(r); lembrarBarra(r); }
   else if(a==='retry'){ await startSession(usuarioAtual); }
@@ -184,16 +196,22 @@ document.addEventListener('submit', async e => {
   }
   if(FORMS[k] && await run(() => FORMS[k](dados))){
     if(k==='produto') state.editId = null;
+    if(k==='cliente') state.editCliente = null;
+    if(k==='fornecedor') state.editFornecedor = null;
     render();
   }
 });
 
+const FILTROS = {
+  u: [() => state.fUnit, '#uTbl', unidadesRows],
+  h: [() => state.fHist, '#hTbl', histRows],
+  c: [() => state.fCliente, '#cTbl', clientesRows],
+};
 document.addEventListener('input', e => {
-  const t = e.target;
-  if(!t.dataset.f) return;
-  const u = t.dataset.f==='u';
-  (u ? state.fUnit : state.fHist)[t.dataset.k] = t.value;
-  $(u ? '#uTbl' : '#hTbl').innerHTML = (u ? unidadesRows : histRows)(state);
+  const t = e.target, f = FILTROS[t.dataset.f];
+  if(!f) return;
+  f[0]()[t.dataset.k] = t.value;
+  $(f[1]).innerHTML = f[2](state);
 });
 
 document.addEventListener('change', e => {

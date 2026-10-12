@@ -20,7 +20,7 @@ Os módulos ES exigem servidor HTTP; abrir o `index.html` direto pelo arquivo n�
 5. **Project Settings > API:** copie a *Project URL* e a chave *anon public* para `src/config.js`.
 6. Para levar os dados do protótipo antigo: no navegador onde ele funcionava, aba **Dados**, copie o *Backup completo em JSON*; depois, já logado na versão nova, cole em **Importar backup**.
 
-Cada produto, unidade e movimentação é uma linha com o JSON em `data`. A cada operação o app relê os dados do servidor, aplica a regra e grava só as linhas que mudaram; alterações da outra pessoa aparecem em tempo real no Painel, Unidades e Histórico.
+Cada produto, unidade, movimentação, cliente e fornecedor é uma linha com o JSON em `data`. O `schema.sql` pode ser rodado de novo sempre que o sistema ganhar uma tabela (as tabelas `customers` e `suppliers` vieram com Clientes e Fornecedores); enquanto elas não existem, o app abre normalmente e avisa ao tentar gravar um cliente ou fornecedor. A cada operação o app relê os dados do servidor, aplica a regra e grava só as linhas que mudaram; alterações da outra pessoa aparecem em tempo real no Painel, Unidades e Histórico.
 
 Limite conhecido: se vocês dois confirmarem uma venda no mesmo instante, a última gravação vence. Para esse uso a janela é de milissegundos; se virar problema, o passo seguinte é mover as operações para funções SQL transacionais.
 
@@ -32,12 +32,14 @@ Limite conhecido: se vocês dois confirmarem uma venda no mesmo instante, a últ
 
 ## Abas
 
-Painel (dashboard), Balanço, Unidades, Produtos, Entradas, Vendas, Baixas, Histórico e Dados.
+Painel (dashboard), Balanço, Unidades, Produtos, Entradas, Vendas, Baixas, Clientes, Fornecedores, Histórico e Dados.
 
 - **Painel:** receita, lucro líquido, despesas e perdas, ticket médio; receita ou lucro por dia (ou por mês em períodos longos); produtos que mais deram lucro; vendas por forma de pagamento; estoque parado há mais tempo; situação por produto.
 - **Balanço:** três visões separadas. *Lucro* = vendas − custo dos aparelhos vendidos − despesas − perdas. *Caixa* = o que entrou (vendas) − o que saiu (compras de produto + despesas). *Dinheiro parado em estoque* = custo dos aparelhos ainda não vendidos. Tem o formulário de despesas.
 - **Formas de pagamento:** Pix, Dinheiro e Maquininha.
 - **Despesas:** Frete, Embalagem, Anúncios, Taxa de cartão, Taxa de Pix e Outros. A compra de produto não é despesa: já é lançada em Entradas e aparece no Balanço como "Produto (compras)".
+- **Clientes:** nome, telefone/WhatsApp (vira link) e observações; mostra quantas compras, total gasto, ticket médio e última compra, e abre o histórico de cada um. O campo Cliente da venda sugere os cadastrados, mas aceita um nome novo (que fica só como texto). Vendas antigas são ligadas ao cadastro pelo nome.
+- **Fornecedores:** nome, contato, site, pedido mínimo, prazo e forma de pagamento; mostra quantas compras e o total comprado. O campo Fornecedor da entrada sugere os cadastrados. Um botão cadastra a XDistribuidora com as condições do catálogo.
 - Períodos: todo o período, hoje, últimos 7 dias, este mês e mês anterior.
 
 ## Regras

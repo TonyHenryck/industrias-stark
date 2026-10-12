@@ -1,5 +1,5 @@
 import { sum, hoje, fmtDate } from './util.js';
-import { prod, nomeProd, situacao, units } from './queries.js';
+import { prod, nomeProd, situacao, units, norm } from './queries.js';
 import { TIPOS, PAGTOS } from './constants.js';
 
 /* ---------- períodos ---------- */
@@ -150,6 +150,44 @@ export function estoqueMaisAntigo(db, ref = hoje(), limite = 5){
       return {id:p.id, nome:nomeProd(p), qtd:disp.length, dias:Math.max(0, diasEntre(antiga, ref))};
     })
     .filter(Boolean).sort((a, b) => b.dias - a.dias).slice(0, limite);
+}
+
+/* ---------- clientes e fornecedores ---------- */
+
+const vendasAtivas = db => db.moves.filter(m => m.tipo === 'venda' && !m.cancelada);
+/** A venda é deste cliente se tem o id dele, ou (vendas antigas) o mesmo nome em texto. */
+const ehDoCliente = c => m => m.customerId === c.id || (!m.customerId && norm(m.cliente) !== '' && norm(m.cliente) === norm(c.nome));
+const ehDoFornecedor = f => m => m.supplierId === f.id || (!m.supplierId && norm(m.fornecedor) !== '' && norm(m.fornecedor) === norm(f.nome));
+const maisRecentePrimeiro = (a, b) => b.data.localeCompare(a.data) || b.ts - a.ts;
+
+export const comprasDoCliente = (db, c) => vendasAtivas(db).filter(ehDoCliente(c)).sort(maisRecentePrimeiro);
+
+export function resumoClientes(db){
+  return (db.customers || []).map(c => {
+    const v = comprasDoCliente(db, c), total = sum(v, 'valor');
+    return {...c, compras:v.length, unidades:sum(v, 'qty'), total, ticket: v.length ? total / v.length : 0, ultima: v[0]?.data || ''};
+  }).sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
+}
+
+export function resumoFornecedores(db){
+  const entradas = db.moves.filter(m => m.tipo === 'entrada');
+  return (db.suppliers || []).map(f => {
+    const e = entradas.filter(ehDoFornecedor(f)).sort(maisRecentePrimeiro);
+    return {...f, entradas:e.length, unidades:sum(e, 'qty'), total:sum(e, 'valor'), ultima: e[0]?.data || ''};
+  }).sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
+}
+
+/** Quem mais comprou no período (só vendas com cliente informado). */
+export function topClientes(db, periodo, ref = hoje(), limite = 5){
+  const por = new Map();
+  for(const v of vendasAtivas(db).filter(m => noPeriodo(m, periodo, ref))){
+    const cad = (db.customers || []).find(c => c.id === v.customerId);
+    const nome = cad?.nome || v.cliente;
+    if(norm(nome) === '') continue;
+    const chave = cad ? cad.id : norm(nome), a = por.get(chave) || {nome, compras:0, total:0};
+    a.compras += 1; a.total += v.valor; por.set(chave, a);
+  }
+  return [...por.values()].sort((a, b) => b.total - a.total).slice(0, limite);
 }
 
 /* ---------- exportação ---------- */

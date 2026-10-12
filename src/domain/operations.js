@@ -5,7 +5,7 @@
  */
 import { fail } from './errors.js';
 import { uid, str, hoje, fmtDate, parseSeriais, sortUnits } from './util.js';
-import { prod, units, nomeProd, isDb } from './queries.js';
+import { prod, units, nomeProd, isDb, normalizar, norm, acharPorNome } from './queries.js';
 import { CATEGORIAS_DESPESA } from './constants.js';
 
 const produtoOuFalha = (db, id) => prod(db, id) || fail('Escolha o produto.');
@@ -46,6 +46,42 @@ export function importarCatalogo(db, itens){
   return `${novos} produto(s) importado(s)` + (jaExistiam ? `, ${jaExistiam} já existiam.` : '.');
 }
 
+/* ---------- clientes e fornecedores ---------- */
+
+/** Cria ou atualiza um cadastro de `lista` (clientes ou fornecedores). Nome obrigatório e único. */
+function salvarContato(lista, rotulo, campos, f){
+  const nome = str(f.nome).trim();
+  if(!nome) fail(`Informe o nome do ${rotulo}.`);
+  const repetido = lista.find(x => norm(x.nome) === norm(nome) && x.id !== f.id);
+  if(repetido) fail(`Já existe um ${rotulo} chamado "${repetido.nome}".`);
+  const dados = {nome, ...Object.fromEntries(campos.map(c => [c, str(f[c]).trim()]))};
+  if(f.id){
+    const atual = lista.find(x => x.id === f.id) || fail(`${rotulo[0].toUpperCase() + rotulo.slice(1)} não encontrado.`);
+    Object.assign(atual, dados);
+    return `${rotulo[0].toUpperCase() + rotulo.slice(1)} atualizado.`;
+  }
+  lista.push({id:uid(), ...dados, criado:hoje()});
+  return `${rotulo[0].toUpperCase() + rotulo.slice(1)} cadastrado.`;
+}
+
+export const salvarCliente = (db, f) => salvarContato(normalizar(db).customers, 'cliente', ['telefone', 'obs'], f);
+export const salvarFornecedor = (db, f) => salvarContato(normalizar(db).suppliers, 'fornecedor',
+  ['contato', 'site', 'pedidoMinimo', 'prazo', 'pagamento', 'obs'], f);
+
+/** Excluir não apaga o histórico: vendas e entradas guardam o nome em texto. */
+export function excluirCliente(db, id){
+  normalizar(db);
+  if(!db.customers.some(c => c.id === id)) return null;
+  db.customers = db.customers.filter(c => c.id !== id);
+  return 'Cliente excluído. O histórico de vendas continua com o nome dele.';
+}
+export function excluirFornecedor(db, id){
+  normalizar(db);
+  if(!db.suppliers.some(c => c.id === id)) return null;
+  db.suppliers = db.suppliers.filter(c => c.id !== id);
+  return 'Fornecedor excluído. O histórico de entradas continua com o nome dele.';
+}
+
 export function excluirProduto(db, id){
   if(db.units.some(u => u.productId===id) || db.moves.some(m => m.productId===id))
     fail('Este produto já tem movimentações. Edite em vez de excluir.');
@@ -65,8 +101,9 @@ export function addEntrada(db, f){
   const data = f.data || hoje(), id = uid(), ts = Date.now();
   for(let i=0; i<q; i++)
     db.units.push({id:uid(), productId:p.id, serial:seriais[i]||'', custo, status:'disponivel', entradaId:id, saidaId:'', dataEntrada:data, dataSaida:'', ts:ts+i});
+  const fornecedor = str(f.fornecedor).trim(), forn = acharPorNome(db.suppliers, fornecedor);
   db.moves.push({id, tipo:'entrada', data, productId:p.id, qty:q, custoUnit:custo, valor:q*custo,
-    fornecedor:str(f.fornecedor).trim(), serials:seriais, obs:str(f.obs).trim(), ts});
+    fornecedor, ...(forn && {supplierId:forn.id}), serials:seriais, obs:str(f.obs).trim(), ts});
   return `${q} unidade(s) registrada(s).`;
 }
 
@@ -97,8 +134,9 @@ export function addVenda(db, f){
   const data = f.data || hoje(), id = uid();
   const custo = escolhidas.reduce((s,u) => s + u.custo, 0), valor = q * preco;
   escolhidas.forEach(u => { u.status='vendido'; u.saidaId=id; u.dataSaida=data; });
+  const cliente = str(f.cliente).trim(), cli = acharPorNome(db.customers, cliente);
   db.moves.push({id, tipo:'venda', data, productId:p.id, qty:q, precoUnit:preco, valor, custo, lucro:valor-custo,
-    cliente:str(f.cliente).trim(), pagamento:f.pagamento, serials:escolhidas.map(u=>u.serial).filter(Boolean),
+    cliente, ...(cli && {customerId:cli.id}), pagamento:f.pagamento, serials:escolhidas.map(u=>u.serial).filter(Boolean),
     obs:str(f.obs).trim(), cancelada:false, ts:Date.now()});
   return 'Venda registrada.';
 }
@@ -148,5 +186,5 @@ export function parseBackup(texto){
   let d;
   try{ d = JSON.parse(t); }catch(e){ fail('Conteúdo inválido. Verifique o backup.'); }
   if(!isDb(d)) fail('Este conteúdo não é um backup deste sistema.');
-  return d;
+  return normalizar(d);
 }

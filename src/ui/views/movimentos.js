@@ -2,7 +2,7 @@ import { esc, brl, opt, badge, fmtDate } from '../format.js';
 import { prod, nomeProd } from '../../domain/queries.js';
 import { hoje } from '../../domain/util.js';
 import { PAGTOS, MOTIVOS } from '../../domain/constants.js';
-import { prodOpts } from '../shared.js';
+import { prodOpts, datalist } from '../shared.js';
 
 const recentes = (db, tipo, n) => db.moves.filter(m => m.tipo===tipo).sort((a,b)=>b.ts-a.ts).slice(0, n);
 
@@ -25,7 +25,7 @@ export const entradas = ({db}) => `
       <label>Data*<input name="data" type="date" required value="${hoje()}"></label>
       <label>Quantidade<input name="qtd" type="number" min="1" value="1"></label>
       <label>Custo unitário (R$)<input name="custo" type="number" step="0.01" min="0" placeholder="Padrão do produto"></label>
-      <label>Fornecedor<input name="fornecedor"></label>
+      <label>Fornecedor<input name="fornecedor" list="listaFornecedores" autocomplete="off">${datalist('listaFornecedores', db.suppliers)}</label>
       <label class="wide">Números de série (opcional)<textarea name="seriais" rows="3" placeholder="Um por linha"></textarea></label>
       <label class="wide">Observações<input name="obs"></label>
       <div class="actions wide"><button class="btn primary" type="submit">Registrar entrada</button></div>
@@ -54,7 +54,7 @@ export const vendas = ({db}) => `
       <label>Data*<input name="data" type="date" required value="${hoje()}"></label>
       <label>Quantidade<input name="qtd" type="number" min="1" value="1"></label>
       <label>Preço unitário (R$)*<input name="preco" type="number" step="0.01" min="0" required></label>
-      <label>Cliente<input name="cliente"></label>
+      <label>Cliente<input name="cliente" list="listaClientes" autocomplete="off">${datalist('listaClientes', db.customers)}</label>
       <label>Forma de pagamento<select name="pagamento">${PAGTOS.map(p=>opt(p,p,'')).join('')}</select></label>
       <label class="wide">Números de série (opcional)<textarea name="seriais" rows="2" placeholder="Um por linha"></textarea></label>
       <label class="wide">Observações<input name="obs"></label>

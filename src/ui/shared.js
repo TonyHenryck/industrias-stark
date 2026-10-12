@@ -11,3 +11,6 @@ export const badgeUnit = st => ({disponivel:badge('Disponível','ok'), vendido:b
 export const periodoSelect = periodo => `
   <div class="inline" style="margin-bottom:12px"><label class="inline">Período
     <select id="per">${PERIODOS.map(([k, l]) => opt(k, l, periodo)).join('')}</select></label></div>`;
+
+/** Lista de sugestões para um campo de texto (continua aceitando um nome novo). */
+export const datalist = (id, itens) => `<datalist id="${id}">${(itens || []).map(i => `<option value="${esc(i.nome)}"></option>`).join('')}</datalist>`;

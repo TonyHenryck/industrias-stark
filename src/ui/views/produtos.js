@@ -1,5 +1,6 @@
 import { esc, brl } from '../format.js';
 import { prod, stock } from '../../domain/queries.js';
+import { datalist } from '../shared.js';
 import { CATALOGO_XDISTRIBUIDORA, CATALOGO_DATA } from '../../data/catalogo-xdistribuidora.js';
 
 export default ({db, editId}) => {
@@ -30,7 +31,7 @@ export default ({db, editId}) => {
       <label>Custo padrão (R$)<input name="custoPadrao" type="number" step="0.01" min="0" value="${p ? p.custoPadrao : ''}"></label>
       <label>Preço de venda padrão (R$)<input name="precoPadrao" type="number" step="0.01" min="0" value="${p ? p.precoPadrao : ''}"></label>
       <label>Estoque mínimo (alerta)<input name="minimo" type="number" min="0" value="${p ? p.minimo : ''}"></label>
-      <label>Fornecedor padrão<input name="fornecedor" value="${v('fornecedor')}"></label>
+      <label>Fornecedor padrão<input name="fornecedor" value="${v('fornecedor')}" list="listaFornecedores" autocomplete="off">${datalist('listaFornecedores', db.suppliers)}</label>
       <label class="wide">Observações<textarea name="obs" rows="2">${v('obs')}</textarea></label>
       <div class="actions wide">
         <button class="btn primary" type="submit">${p ? 'Salvar alterações' : 'Cadastrar produto'}</button>
