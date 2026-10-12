@@ -1,6 +1,7 @@
 import { $, esc } from './format.js';
 import { state } from './state.js';
 import { TABS, VIEWS } from './views/index.js';
+import { ICONS, logo } from './icons.js';
 import { unidadesRows } from './views/unidades.js';
 import { histRows } from './views/historico.js';
 import { connect } from '../storage/index.js';
@@ -32,23 +33,37 @@ const msgErro = e => {
 window.addEventListener('error', e => toast('Erro inesperado: ' + msgErro(e.error ?? e.message), true));
 window.addEventListener('unhandledrejection', e => toast('Erro inesperado: ' + msgErro(e.reason), true));
 
-function render(){
+function render(animar = false){
   state.confirmImport = false;
   $('#tabs').innerHTML = TABS.map(([k,l]) =>
-    `<button class="tab ${k===state.view?'on':''}" data-act="go" data-v="${k}" ${k===state.view?'aria-current="page"':''}>${l}</button>`).join('');
-  $('#main').innerHTML = VIEWS[state.view](state);
+    `<button class="tab ${k===state.view?'on':''}" data-act="go" data-v="${k}" title="${l}" ${k===state.view?'aria-current="page"':''}>${ICONS[k]}<span>${l}</span></button>`).join('');
+  const main = $('#main');
+  main.classList.toggle('enter', animar);
+  main.innerHTML = VIEWS[state.view](state);
 }
 
+/** Barra lateral recolhida ou aberta; a escolha fica guardada neste navegador. */
+function aplicarBarra(recolhida){
+  document.body.classList.toggle('collapsed', recolhida);
+  const b = $('#sideToggle'), t = recolhida ? 'Expandir menu' : 'Recolher menu';
+  b.setAttribute('aria-label', t); b.title = t;
+}
+function lembrarBarra(recolhida){ try{ localStorage.setItem('estoque-barra-recolhida', recolhida ? '1' : '0'); }catch(e){} }
+function barraGuardada(){ try{ return localStorage.getItem('estoque-barra-recolhida') === '1'; }catch(e){ return false; } }
+
 function renderLogin(msg=''){
+  document.body.classList.add('auth');
   $('#tabs').innerHTML = '';
   $('#user').innerHTML = '';
+  $('#main').classList.remove('enter');
   $('#main').innerHTML = `
-  <section class="card" style="max-width:420px;margin-inline:auto">
-    <h2>Entrar</h2>
-    <p class="hint">Acesso só para quem foi liberado no Supabase.</p>
-    ${msg ? `<p class="alert">${esc(msg)}</p>` : ''}
+  <section class="login">
+    <div class="logo">${logo('logoLogin')}</div>
+    <h2>Indústrias Stark</h2>
+    <p class="login-sub">Estoque de smartwatches. Acesso só para quem foi liberado.</p>
+    ${msg ? `<p class="alert" role="alert">${esc(msg)}</p>` : ''}
     <form data-form="login" class="form" style="grid-template-columns:1fr">
-      <label>E-mail<input name="email" type="email" required autocomplete="username"></label>
+      <label>E-mail<input name="email" type="email" required autocomplete="username" autofocus></label>
       <label>Senha<input name="password" type="password" required autocomplete="current-password"></label>
       <div class="actions"><button class="btn primary" type="submit">Entrar</button></div>
     </form>
@@ -70,8 +85,9 @@ let usuarioAtual = null;
 
 async function startSession(user){
   usuarioAtual = user;
+  document.body.classList.remove('auth');
   $('.head .sub').textContent = textoRodape();
-  $('#user').innerHTML = user ? `${esc(user.email)} · <button class="btn small" data-act="logout">Sair</button>` : '';
+  $('#user').innerHTML = user ? `<span class="side-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn small" data-act="logout">Sair</button>` : '';
   $('#main').innerHTML = '<p class="empty">Carregando…</p>';
   try{
     if(store.auth && !(await comTempo(store.auth.isMember(), TEMPO_MAX_MS))){
@@ -136,12 +152,13 @@ const FORMS = {
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
-  if(a==='go'){ state.view = b.dataset.v; state.editId = null; render(); window.scrollTo(0,0); }
+  if(a==='go'){ state.view = b.dataset.v; state.editId = null; render(true); window.scrollTo(0,0); }
   else if(a==='editP'){ state.editId = b.dataset.id; state.view = 'produtos'; render(); window.scrollTo(0,0); }
   else if(a==='cancelEdit'){ state.editId = null; render(); }
   else if(a==='delP'){ await run(() => excluirProduto(state.db, b.dataset.id)); render(); }
   else if(a==='importCatalogo'){ await run(() => importarCatalogo(state.db, CATALOGO_XDISTRIBUIDORA)); render(); }
   else if(a==='cancelVenda'){ await run(() => cancelarVenda(state.db, b.dataset.id)); render(); }
+  else if(a==='toggleSidebar'){ const r = !document.body.classList.contains('collapsed'); aplicarBarra(r); lembrarBarra(r); }
   else if(a==='retry'){ await startSession(usuarioAtual); }
   else if(a==='logout'){ unsubscribe(); await store.auth.signOut(); }
   else if(a==='copy'){
@@ -182,6 +199,8 @@ document.addEventListener('change', e => {
 });
 
 /* ---------- início ---------- */
+$('#brandLogo').innerHTML = logo('logoMenu');
+aplicarBarra(barraGuardada());
 store = await connect();
 if(!store.auth){
   await startSession(null);
