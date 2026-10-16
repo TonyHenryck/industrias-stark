@@ -4,7 +4,8 @@ import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.
 import { DomainError } from '../src/domain/errors.js';
 import { somaMeses } from '../src/domain/util.js';
 import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, MAX_FOTOS } from '../src/domain/operations.js';
-import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta } from '../src/domain/reports.js';
+import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo } from '../src/domain/reports.js';
+import { parseDias, garantiaAte, situacaoGarantia, garantiaDoFornecedor, GARANTIA_PADRAO } from '../src/domain/garantia.js';
 
 const novoProduto = (db, extra={}) => {
   salvarProduto(db, {nome:'Bip 5', custoPadrao:'200', precoPadrao:'350', minimo:'2', ...extra});
@@ -823,5 +824,153 @@ describe('fotos dos produtos', () => {
     adicionarFoto(db, p.id, 'a/1.jpg');
     salvarProduto(db, {id:p.id, nome:'Bip 5 Pro', custoPadrao:'210'});
     assert.deepEqual(db.products[0].fotos, ['a/1.jpg']);
+  });
+});
+
+
+describe('garantias', () => {
+  const ref = '2026-10-12';
+
+  test('prazo: vazio é 90 dias, zero é sem garantia, e só aceita inteiros de 0 a 3650', () => {
+    assert.equal(GARANTIA_PADRAO, 90);
+    assert.equal(parseDias(''), 90);
+    assert.equal(parseDias(undefined), 90);
+    assert.equal(parseDias('0'), 0);
+    assert.equal(parseDias('30'), 30);
+    assert.equal(parseDias('3650'), 3650);
+    for(const ruim of ['-1', '1.5', 'abc', '3651']) erro(() => parseDias(ruim), 'número inteiro de dias');
+    assert.equal(garantiaAte('2026-10-01', 90), '2026-12-30');
+    assert.equal(garantiaAte('2026-10-01', 0), '');
+  });
+
+  test('situação: o último dia ainda vale, o dia seguinte venceu', () => {
+    assert.deepEqual(situacaoGarantia('2026-10-12', ref), {situacao:'ativa', ate:'2026-10-12', dias:0});
+    assert.equal(situacaoGarantia('2026-10-11', ref).situacao, 'vencida');
+    assert.equal(situacaoGarantia('2026-10-11', ref).dias, -1);
+    assert.equal(situacaoGarantia('', ref).situacao, 'sem');
+    assert.equal(situacaoGarantia(undefined, ref).situacao, 'naoRegistrada');
+  });
+
+  test('a venda guarda a garantia dada ao cliente (90 dias por padrão)', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'3'});
+    venda(db, p, {data:'2026-10-01'});
+    venda(db, p, {data:'2026-10-01', garantia:'30'});
+    venda(db, p, {data:'2026-10-01', garantia:'0'});
+    const v = db.moves.filter(m => m.tipo === 'venda');
+    assert.deepEqual(v.map(m => [m.garantiaDias, m.garantiaAte]), [[90, '2026-12-30'], [30, '2026-10-31'], [0, '']]);
+  });
+
+  test('garantia inválida na venda não grava nada', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2'});
+    erro(() => venda(db, p, {garantia:'-5'}), 'número inteiro de dias');
+    erro(() => venda(db, p, {garantia:'abc'}), 'número inteiro de dias');
+    assert.equal(stock(db, p.id), 2);
+    assert.equal(db.moves.filter(m => m.tipo === 'venda').length, 0);
+  });
+
+  test('a entrada guarda a garantia do fornecedor em cada unidade', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2', data:'2026-10-01'});
+    entrada(db, p, {qtd:'1', data:'2026-10-01', garantiaForn:'30'});
+    entrada(db, p, {qtd:'1', data:'2026-10-01', garantiaForn:'0'});
+    assert.deepEqual(db.units.map(u => u.garantiaFornAte), ['2026-12-30', '2026-12-30', '2026-10-31', '']);
+    assert.equal(db.moves.filter(m => m.tipo === 'entrada')[1].garantiaFornDias, 30);
+    erro(() => entrada(db, p, {garantiaForn:'x'}), 'número inteiro de dias');
+    assert.equal(db.units.length, 4);
+  });
+
+  test('aparelho comprado antes do recurso usa 90 dias da entrada e é marcado como estimado', () => {
+    const antigo = {dataEntrada:'2026-08-01'};                    // sem garantiaFornAte
+    const g = garantiaDoFornecedor(antigo, ref);
+    assert.deepEqual([g.estimada, g.ate, g.situacao], [true, '2026-10-30', 'ativa']);
+    const novo = garantiaDoFornecedor({dataEntrada:'2026-08-01', garantiaFornAte:'2026-09-01'}, ref);
+    assert.deepEqual([novo.estimada, novo.situacao], [false, 'vencida']);
+    assert.equal(garantiaDoFornecedor({dataEntrada:'2026-08-01', garantiaFornAte:''}, ref).situacao, 'sem');
+  });
+
+  test('consulta por série, nome do cliente e telefone; ignora venda cancelada', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    salvarCliente(db, {nome:'Maria Souza', telefone:'(85) 99999-0000'});
+    entrada(db, p, {qtd:'4', seriais:'AB123\nAB124\nZZ900\nZZ901', data:'2026-09-01'});
+    venda(db, p, {seriais:'AB123', cliente:'Maria Souza', data:'2026-10-01'});
+    venda(db, p, {seriais:'AB124', cliente:'João', data:'2026-06-01'});
+    venda(db, p, {seriais:'ZZ900', cliente:'Maria Souza', data:'2026-10-05', garantia:'0'});
+    venda(db, p, {seriais:'ZZ901', cliente:'Maria Souza', data:'2026-10-06'});
+    cancelarVenda(db, db.moves.filter(m => m.tipo === 'venda').at(-1).id);
+
+    const porSerie = consultarGarantia(db, 'ab123', ref);
+    assert.deepEqual(porSerie.map(r => [r.cliente, r.garantia.situacao, r.garantia.ate]), [['Maria Souza', 'ativa', '2026-12-30']]);
+    assert.deepEqual(consultarGarantia(db, 'AB12', ref).map(r => r.serials[0]), ['AB123', 'AB124']);
+    assert.equal(consultarGarantia(db, 'AB124', ref)[0].garantia.situacao, 'vencida');
+    assert.deepEqual(consultarGarantia(db, 'maria', ref).map(r => r.serials[0]), ['ZZ900', 'AB123']);   // mais recente primeiro, sem a cancelada
+    assert.equal(consultarGarantia(db, 'maria', ref)[0].garantia.situacao, 'sem');
+    // o telefone acha as vendas ligadas ao cadastro dela, e não as do João (que não tem cadastro)
+    assert.deepEqual(consultarGarantia(db, '99999-0000', ref).map(r => r.cliente), ['Maria Souza', 'Maria Souza']);
+    assert.equal(consultarGarantia(db, '(85) 99999', ref).length, 2);
+  });
+
+  test('o telefone acha as vendas do cliente cadastrado', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    salvarCliente(db, {nome:'Ana', telefone:'(85) 98888-1111'});
+    entrada(db, p, {qtd:'2'});
+    venda(db, p, {cliente:'Ana'});
+    venda(db, p, {cliente:'Outra'});
+    assert.equal(consultarGarantia(db, '98888-1111', ref).length, 1);
+    assert.equal(consultarGarantia(db, '988881111', ref).length, 1);
+    assert.equal(consultarGarantia(db, '1111', ref).length, 1);
+    assert.equal(consultarGarantia(db, '123', ref).length, 0);
+  });
+
+  test('busca curta ou vazia não devolve nada', () => {
+    const db = emptyDb();
+    assert.deepEqual(consultarGarantia(db, '', ref), []);
+    assert.deepEqual(consultarGarantia(db, ' a ', ref), []);
+  });
+
+  test('venda antiga, sem garantia registrada, aparece como não registrada', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p);
+    venda(db, p, {cliente:'Velho'});
+    const m = db.moves.find(x => x.tipo === 'venda');
+    delete m.garantiaDias; delete m.garantiaAte;
+    assert.equal(consultarGarantia(db, 'velho', ref)[0].garantia.situacao, 'naoRegistrada');
+  });
+
+  test('baixa por defeito avisa quando ainda dá para pedir a troca ao fornecedor', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2', data:'2026-10-01'});
+    const msg = addBaixa(db, {produto:p.id, qtd:'1', motivo:'Defeito', data:'2026-10-12'});
+    assert.match(msg, /1 unidade\(s\) ainda na garantia do fornecedor até 30\/12\/2026\. Peça a troca/);
+    assert.doesNotMatch(msg, /estimado/);
+  });
+
+  test('baixa por outro motivo, ou fora do prazo, não avisa', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'3', data:'2026-01-01'});
+    assert.equal(addBaixa(db, {produto:p.id, qtd:'1', motivo:'Perda ou extravio', data:'2026-01-05'}), 'Baixa registrada.');
+    assert.equal(addBaixa(db, {produto:p.id, qtd:'1', motivo:'Defeito', data:'2026-10-12'}), 'Baixa registrada.');   // 90 dias já passaram
+    entrada(db, p, {qtd:'1', data:'2026-10-01', garantiaForn:'0'});
+    assert.equal(addBaixa(db, {produto:p.id, qtd:'1', motivo:'Defeito', data:'2026-10-12'}), 'Baixa registrada.');   // fornecedor não deu garantia
+  });
+
+  test('aparelho antigo na baixa: o aviso diz que o prazo é estimado', () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {data:'2026-10-01'});
+    delete db.units[0].garantiaFornAte;
+    assert.match(addBaixa(db, {produto:p.id, qtd:'1', motivo:'Defeito', data:'2026-10-12'}), /prazo estimado em 90 dias/);
+  });
+
+  test('alerta de garantia do fornecedor acabando, só para o que está em estoque', () => {
+    const db = emptyDb(), a = novoProduto(db, {nome:'A'}), b = novoProduto(db, {nome:'B'}), c = novoProduto(db, {nome:'C'});
+    entrada(db, a, {qtd:'2', data:'2026-07-20'});                    // vence em 2026-10-18 (6 dias)
+    entrada(db, a, {qtd:'1', data:'2026-07-25'});                    // vence em 2026-10-23 (11 dias)
+    entrada(db, b, {qtd:'1', data:'2026-09-01'});                    // vence em 2026-11-30 (fora dos 15 dias)
+    entrada(db, c, {qtd:'1', data:'2026-07-01', garantiaForn:'30'}); // já venceu
+    const r = garantiasVencendo(db, ref, 15);
+    assert.deepEqual(r.map(x => [x.nome, x.qtd, x.ate, x.dias]), [['A', 3, '2026-10-18', 6]]);
+    venda(db, a, {qtd:'3', preco:'100'});                            // vendeu tudo: nada mais a devolver
+    assert.deepEqual(garantiasVencendo(db, ref, 15), []);
   });
 });

@@ -7,6 +7,7 @@ import { fail } from './errors.js';
 import { uid, str, hoje, fmtDate, parseSeriais, sortUnits, arred, dataValida, somaMeses } from './util.js';
 import { prod, units, nomeProd, isDb, normalizar, norm, acharPorNome } from './queries.js';
 import { CATEGORIAS_DESPESA } from './constants.js';
+import { parseDias, garantiaAte, garantiaDoFornecedor } from './garantia.js';
 
 const produtoOuFalha = (db, id) => prod(db, id) || fail('Escolha o produto.');
 
@@ -141,12 +142,13 @@ export function addEntrada(db, f){
   const custo = parseFloat(f.custo) || p.custoPadrao || 0;
   const aPagar = f.condicao === 'pagar';
   const plano = aPagar ? planoParcelas(q * custo, f) : [];
+  const garantiaDias = parseDias(f.garantiaForn);
   const data = f.data || hoje(), id = uid(), ts = Date.now();
   for(let i=0; i<q; i++)
-    db.units.push({id:uid(), productId:p.id, serial:seriais[i]||'', custo, status:'disponivel', entradaId:id, saidaId:'', dataEntrada:data, dataSaida:'', ts:ts+i});
+    db.units.push({id:uid(), productId:p.id, serial:seriais[i]||'', custo, status:'disponivel', entradaId:id, saidaId:'', dataEntrada:data, dataSaida:'', garantiaFornAte:garantiaAte(data, garantiaDias), ts:ts+i});
   const fornecedor = str(f.fornecedor).trim(), forn = acharPorNome(db.suppliers, fornecedor);
   db.moves.push({id, tipo:'entrada', data, productId:p.id, qty:q, custoUnit:custo, valor:q*custo,
-    fornecedor, ...(forn && {supplierId:forn.id}), ...(aPagar && {aPagar:true}), serials:seriais, obs:str(f.obs).trim(), ts});
+    fornecedor, ...(forn && {supplierId:forn.id}), ...(aPagar && {aPagar:true}), garantiaFornDias:garantiaDias, serials:seriais, obs:str(f.obs).trim(), ts});
   if(aPagar) criarContas(db, plano, {tipo:'pagar', origem:'entrada', moveId:id, descricao:`Compra de ${nomeProd(p)} (${q} un.)`, parte:fornecedor, ...(forn && {partyId:forn.id})});
   return `${q} unidade(s) registrada(s)` + (aPagar ? `, a pagar em ${plano.length}x.` : '.');
 }
@@ -178,12 +180,13 @@ export function addVenda(db, f){
   const data = f.data || hoje(), id = uid();
   const custo = escolhidas.reduce((s,u) => s + u.custo, 0), valor = q * preco;
   const cliente = str(f.cliente).trim(), cli = acharPorNome(db.customers, cliente);
+  const garantiaDias = parseDias(f.garantia);
   const aReceber = f.recebimento === 'receber';
   if(aReceber && !cliente) fail('Informe o cliente: uma venda a receber precisa do nome de quem vai pagar.');
   const plano = aReceber ? planoParcelas(valor, f) : [];
   escolhidas.forEach(u => { u.status='vendido'; u.saidaId=id; u.dataSaida=data; });
   db.moves.push({id, tipo:'venda', data, productId:p.id, qty:q, precoUnit:preco, valor, custo, lucro:valor-custo,
-    cliente, ...(cli && {customerId:cli.id}), ...(aReceber && {aReceber:true}), pagamento:f.pagamento, serials:escolhidas.map(u=>u.serial).filter(Boolean),
+    cliente, ...(cli && {customerId:cli.id}), ...(aReceber && {aReceber:true}), garantiaDias, garantiaAte:garantiaAte(data, garantiaDias), pagamento:f.pagamento, serials:escolhidas.map(u=>u.serial).filter(Boolean),
     obs:str(f.obs).trim(), cancelada:false, ts:Date.now()});
   if(aReceber) criarContas(db, plano, {tipo:'receber', origem:'venda', moveId:id, descricao:`Venda de ${nomeProd(p)} (${q} un.)`, parte:cliente, ...(cli && {partyId:cli.id})});
   return aReceber ? `Venda registrada, a receber em ${plano.length}x.` : 'Venda registrada.';
@@ -210,10 +213,16 @@ export function addBaixa(db, f){
   const escolhidas = escolherUnidades(db, p, [], q);
   const id = uid(), data = f.data || hoje();
   const custo = escolhidas.reduce((s,u) => s + u.custo, 0);
+  // Defeito dentro do prazo do fornecedor: dá para pedir a troca.
+  const naGarantia = f.motivo === 'Defeito'
+    ? escolhidas.map(u => garantiaDoFornecedor(u, data)).filter(g => g.situacao === 'ativa') : [];
   escolhidas.forEach(u => { u.status='baixa'; u.saidaId=id; u.dataSaida=data; });
   db.moves.push({id, tipo:'baixa', data, productId:p.id, qty:q, valor:custo, motivo:f.motivo,
     serials:escolhidas.map(u=>u.serial).filter(Boolean), obs:str(f.obs).trim(), ts:Date.now()});
-  return 'Baixa registrada.';
+  if(!naGarantia.length) return 'Baixa registrada.';
+  const prazo = naGarantia.map(g => g.ate).sort()[0];
+  const quando = naGarantia.some(g => g.estimada) ? ' (prazo estimado em 90 dias da entrada)' : '';
+  return `Baixa registrada. ${naGarantia.length} unidade(s) ainda na garantia do fornecedor até ${fmtDate(prazo)}${quando}. Peça a troca antes do prazo.`;
 }
 
 export function addDespesa(db, f){

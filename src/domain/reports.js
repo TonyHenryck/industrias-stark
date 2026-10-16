@@ -1,13 +1,13 @@
-import { sum, hoje, fmtDate } from './util.js';
+import { sum, hoje, fmtDate, somaDias, diasEntre } from './util.js';
+export { somaDias, diasEntre };
 import { prod, nomeProd, situacao, units, norm } from './queries.js';
 import { TIPOS, PAGTOS } from './constants.js';
+import { garantiaDaVenda, garantiaDoFornecedor } from './garantia.js';
 
 /* ---------- períodos ---------- */
 
 const iso = d => d.toISOString().slice(0, 10);
 const paraData = s => new Date(s + 'T00:00:00Z');
-export const somaDias = (s, n) => { const d = paraData(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
-export const diasEntre = (a, b) => Math.round((paraData(b) - paraData(a)) / 86400000);
 
 const ultimoDia = mes => { const [a, m] = mes.split('-').map(Number); return `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`; };
 
@@ -229,6 +229,49 @@ export function topClientes(db, periodo, ref = hoje(), limite = 5){
     a.compras += 1; a.total += v.valor; por.set(chave, a);
   }
   return [...por.values()].sort((a, b) => b.total - a.total).slice(0, limite);
+}
+
+/* ---------- garantias ---------- */
+
+const soDigitos = s => String(s ?? '').replace(/\D/g, '');
+
+/**
+ * Procura vendas (não canceladas) pelo número de série, pelo nome do cliente ou pelo telefone dele,
+ * e diz se a garantia ainda vale. Mais recentes primeiro. Busca com menos de 2 caracteres não devolve nada.
+ */
+export function consultarGarantia(db, termo, ref = hoje()){
+  const t = norm(termo), d = soDigitos(termo);
+  if(t.length < 2) return [];
+  return db.moves
+    .filter(m => m.tipo === 'venda' && !m.cancelada)
+    .filter(m => {
+      const cli = (db.customers || []).find(c => c.id === m.customerId);
+      return (m.serials || []).some(x => norm(x).includes(t))
+        || norm(m.cliente).includes(t) || norm(cli?.nome).includes(t)
+        || (d.length >= 4 && soDigitos(cli?.telefone).includes(d));
+    })
+    .sort(maisRecentePrimeiro)
+    .map(m => ({
+      id:m.id, data:m.data, produto:nomeProd(prod(db, m.productId)), cliente:m.cliente, serials:m.serials || [],
+      qty:m.qty, valor:m.valor, garantia:garantiaDaVenda(m, ref),
+    }));
+}
+
+/**
+ * Modelos com aparelhos em estoque cuja garantia do fornecedor termina nos próximos `dias` dias:
+ * a hora de testar e devolver os defeituosos.
+ */
+export function garantiasVencendo(db, ref = hoje(), dias = 15){
+  const por = new Map();
+  for(const u of db.units.filter(x => x.status === 'disponivel')){
+    const g = garantiaDoFornecedor(u, ref);
+    if(g.situacao !== 'ativa' || g.dias > dias) continue;
+    const a = por.get(u.productId) || {id:u.productId, nome:nomeProd(prod(db, u.productId)), qtd:0, ate:g.ate, dias:g.dias, estimada:false};
+    a.qtd += 1; a.estimada ||= g.estimada;
+    if(g.ate < a.ate){ a.ate = g.ate; a.dias = g.dias; }
+    por.set(u.productId, a);
+  }
+  return [...por.values()].sort((a, b) => a.dias - b.dias);
 }
 
 /* ---------- exportação ---------- */

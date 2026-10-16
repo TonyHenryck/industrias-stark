@@ -8,6 +8,7 @@ import { uid } from '../domain/util.js';
 import { unidadesRows } from './views/unidades.js';
 import { histRows } from './views/historico.js';
 import { clientesRows } from './views/clientes.js';
+import { garantiaRows } from './views/movimentos.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
 import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto } from '../domain/operations.js';
@@ -21,7 +22,7 @@ function toast(msg, err=false){
   t.textContent = msg;
   t.className = 'show' + (err ? ' err' : '');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.className = '', 2800);
+  toast._t = setTimeout(() => t.className = '', Math.min(9000, Math.max(2800, msg.length * 60)));   // aviso longo fica mais tempo
 }
 
 const SQL_LIBERAR = "insert into public.members (user_id)\nselect id from auth.users where email = 'SEU_EMAIL_AQUI'\non conflict do nothing;";
@@ -235,6 +236,7 @@ const FILTROS = {
   u: [() => state.fUnit, '#uTbl', unidadesRows],
   h: [() => state.fHist, '#hTbl', histRows],
   c: [() => state.fCliente, '#cTbl', clientesRows],
+  g: [() => state.fGarantia, '#gTbl', garantiaRows],
 };
 document.addEventListener('input', e => {
   const t = e.target, f = FILTROS[t.dataset.f];

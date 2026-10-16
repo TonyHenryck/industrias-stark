@@ -17,4 +17,5 @@ export const state = {
   fUnit: {st:'disponivel', pid:'', q:''},
   fHist: {tipo:'', pid:'', q:''},
   fCliente: {q:''},
+  fGarantia: {q:''},
 };

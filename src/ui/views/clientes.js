@@ -1,6 +1,8 @@
 import { esc, brl, nf, fmtDate } from '../format.js';
 import { resumoClientes, comprasDoCliente } from '../../domain/reports.js';
 import { prod, nomeProd, norm } from '../../domain/queries.js';
+import { garantiaDaVenda } from '../../domain/garantia.js';
+import { badgeGarantia } from '../shared.js';
 
 /** Link do WhatsApp quando o telefone tem DDD + número. */
 const zap = tel => {
@@ -30,9 +32,9 @@ function historico(db, c){
   return `<section class="card">
     <div class="card-head"><h2>Compras de ${esc(c.nome)}</h2><button class="btn small" data-act="closeVerC">Fechar</button></div>
     ${compras.length ? `<div class="tbl"><table>
-      <thead><tr><th>Data</th><th>Produto</th><th class="r">Qtd</th><th class="r">Valor</th><th>Pagamento</th></tr></thead>
+      <thead><tr><th>Data</th><th>Produto</th><th class="r">Qtd</th><th class="r">Valor</th><th>Pagamento</th><th>Garantia</th></tr></thead>
       <tbody>${compras.map(m => `<tr><td>${fmtDate(m.data)}</td><td>${esc(nomeProd(prod(db, m.productId)))}</td>
-        <td class="r">${m.qty}</td><td class="r">${brl(m.valor)}</td><td>${esc(m.pagamento || '')}</td></tr>`).join('')}</tbody></table></div>`
+        <td class="r">${m.qty}</td><td class="r">${brl(m.valor)}</td><td>${esc(m.pagamento || '')}</td><td>${badgeGarantia(garantiaDaVenda(m))}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="empty">Este cliente ainda não comprou.</p>'}
   </section>`;
 }

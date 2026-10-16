@@ -26,3 +26,7 @@ export const somaMeses = (iso, n) => {
   const ny = Math.floor(t / 12), nm = t % 12, ultimo = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
   return `${ny}-${String(nm + 1).padStart(2, '0')}-${String(Math.min(d, ultimo)).padStart(2, '0')}`;
 };
+
+const paraData = s => new Date(s + 'T00:00:00Z');
+export const somaDias = (s, n) => { const d = paraData(s); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+export const diasEntre = (a, b) => Math.round((paraData(b) - paraData(a)) / 86400000);
