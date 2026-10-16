@@ -99,3 +99,7 @@ No Painel, o cartão "Metas" mostra dois anéis: **vendas** (receita do mês) e 
 ## Pagamento parcial
 
 Em Contas, o botão **Parcial** registra só uma parte do valor (e a data em que entrou ou saiu o dinheiro). A conta fecha por esse valor, mostrando "de R$ …", e o restante vira uma nova conta pendente, com o vencimento que você escolher. Em conta avulsa a pagar, a despesa é lançada só pelo valor pago. **Desfazer** devolve a conta ao valor original e apaga o restante; se o restante já foi pago, desfaça primeiro o pagamento dele.
+
+## Devolução e troca
+
+Em Vendas, **Devolver ou trocar** abre um formulário na própria linha da venda. Escolha a quantidade (ou as séries), se o aparelho volta ao estoque ou vira baixa por defeito, e quanto dinheiro foi devolvido (o padrão é tudo; pode ser menos ou zero). A venda é ajustada no lugar, então Painel e Balanço já refletem a devolução; o dinheiro devolvido aparece como saída no caixa na data da devolução e a movimentação fica no Histórico. Na troca, o valor devolvido vira crédito e o novo aparelho entra como uma venda nova, tudo ou nada. Vendas com parcelas a receber em aberto não aceitam devolução (receba ou cancele antes), e uma venda que já teve devolução não pode mais ser cancelada.

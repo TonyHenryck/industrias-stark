@@ -11,7 +11,7 @@ import { clientesRows } from './views/clientes.js';
 import { garantiaRows } from './views/movimentos.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta } from '../domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, devolverVenda } from '../domain/operations.js';
 import { expText } from '../domain/reports.js';
 import { CATALOGO_XDISTRIBUIDORA, FORNECEDOR_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
@@ -173,6 +173,7 @@ const FORMS = {
   fornecedor: f => salvarFornecedor(state.db, f),
   conta: f => addContaPagar(state.db, f),
   meta: f => salvarMeta(state.db, f),
+  devolucao: f => devolverVenda(state.db, f),
   pagamentoParcial: f => pagarConta(state.db, f.id, f.data, {valor:f.valor, vencimento:f.vencimento}),
 };
 
@@ -197,6 +198,7 @@ document.addEventListener('click', async e => {
   else if(a==='addXDist'){ await run(() => salvarFornecedor(state.db, FORNECEDOR_XDISTRIBUIDORA)); render(); }
   else if(a==='pagarC'){ await run(() => pagarConta(state.db, b.dataset.id)); render(); }
   else if(a==='parcialC'){ state.parcial = state.parcial === b.dataset.id ? null : b.dataset.id; render(); }
+  else if(a==='devolverV'){ state.devolver = state.devolver === b.dataset.id ? null : b.dataset.id; render(); }
   else if(a==='desfazerC'){ await run(() => desfazerPagamento(state.db, b.dataset.id)); render(); }
   else if(a==='delConta'){ await run(() => excluirConta(state.db, b.dataset.id)); render(); }
   else if(a==='contaTipo'){ state.contaTipo = b.dataset.v; render(); }
@@ -232,6 +234,7 @@ document.addEventListener('submit', async e => {
     if(k==='cliente') state.editCliente = null;
     if(k==='fornecedor') state.editFornecedor = null;
     if(k==='pagamentoParcial') state.parcial = null;
+    if(k==='devolucao') state.devolver = null;
     render();
   }
 });

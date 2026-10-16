@@ -13,6 +13,7 @@ export const state = {
   metrica: 'receita',
   contaTipo: 'todas',
   contaStatus: 'pendentes',
+  devolver: null,           // id da venda com o formulário de devolução aberto
   parcial: null,            // id da conta com o formulário de pagamento parcial aberto
   confirmImport: false,
   fUnit: {st:'disponivel', pid:'', q:''},

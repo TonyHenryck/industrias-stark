@@ -196,6 +196,7 @@ export function addVenda(db, f){
 export function cancelarVenda(db, id){
   const m = db.moves.find(x => x.id === id);
   if(!m || m.tipo !== 'venda' || m.cancelada) return null;
+  if(m.devolvido) fail('Esta venda já teve devolução e não pode ser cancelada. Registre a devolução do que falta.');
   db.units.filter(u => u.saidaId === id).forEach(u => { u.status='disponivel'; u.saidaId=''; u.dataSaida=''; });
   m.cancelada = true;
   const contas = normalizar(db).bills.filter(b => b.moveId === id && b.status !== 'cancelada');
@@ -204,6 +205,60 @@ export function cancelarVenda(db, id){
   db.moves.push({id:uid(), tipo:'cancelamento', data:hoje(), productId:m.productId, qty:m.qty, valor:-m.valor, ref:m.id,
     serials:m.serials||[], obs:`Venda de ${fmtDate(m.data)} cancelada`, ts:Date.now()});
   return 'Venda cancelada. As unidades voltaram ao estoque.' + (jaRecebido ? ` Atenção: ${jaRecebido} parcela(s) já tinha(m) sido recebida(s); devolva o valor ao cliente.` : '');
+}
+
+/**
+ * Devolução (e troca) de uma venda. As unidades devolvidas voltam ao estoque (`destino` 'estoque') ou viram baixa por defeito.
+ * A venda é ajustada no lugar (qtd, valor e custo), então todos os relatórios já refletem a devolução; o dinheiro devolvido
+ * entra no caixa como saída na data da devolução. Com `troca` 'sim', registra também a nova venda, tudo ou nada.
+ * Vendas com parcelas a receber em aberto não aceitam devolução: receba ou cancele a venda antes.
+ */
+export function devolverVenda(db, f){
+  const v = db.moves.find(x => x.id === f.venda && x.tipo === 'venda') || fail('Venda não encontrada.');
+  if(v.cancelada || !(v.qty > 0)) fail('Não há nada a devolver nesta venda.');
+  if(normalizar(db).bills.some(b => b.moveId === v.id && b.status === 'pendente'))
+    fail('Esta venda tem parcelas a receber em aberto. Receba as parcelas ou cancele a venda antes de registrar a devolução.');
+  const data = f.data || hoje();
+  if(!dataValida(data)) fail('Data inválida.');
+  const seriais = parseSeriais(f.seriais);
+  const q = seriais.length || parseInt(f.qtd);
+  if(!q || q < 1) fail('Informe a quantidade devolvida.');
+  const doVenda = db.units.filter(u => u.saidaId === v.id && u.status === 'vendido');
+  if(q > doVenda.length) fail(`Esta venda só tem ${doVenda.length} unidade(s) para devolver.`);
+  const escolhidas = seriais.length ? seriais.map(s => doVenda.find(u => u.serial === s) || fail(`A série ${s} não faz parte desta venda.`)) : doVenda.slice(0, q);
+  const destino = f.destino === 'defeito' ? 'defeito' : 'estoque';
+  const maximo = arred(v.precoUnit * q);
+  const informado = str(f.reembolso).trim() !== '';
+  const reembolso = informado ? arred(parseFloat(str(f.reembolso).replace(',', '.'))) : maximo;
+  if(isNaN(reembolso) || reembolso < 0) fail('Informe o valor devolvido ao cliente (pode ser zero).');
+  if(reembolso > maximo) fail(`O valor devolvido não pode passar de ${maximo.toFixed(2).replace('.', ',')}.`);
+  const troca = f.troca === 'sim';
+  const antes = structuredClone(db);
+  try{
+    const id = uid(), custoVolta = destino === 'estoque' ? escolhidas.reduce((s, u) => s + u.custo, 0) : 0;
+    escolhidas.forEach(u => {
+      if(destino === 'estoque'){ u.status = 'disponivel'; u.saidaId = ''; u.dataSaida = ''; }
+      else { u.status = 'baixa'; u.saidaId = id; u.dataSaida = data; }
+    });
+    const aviso = destino === 'defeito' ? escolhidas.map(u => garantiaDoFornecedor(u, data)).filter(g => g.situacao === 'ativa') : [];
+    v.qty -= q; v.valor = arred(v.valor - reembolso); v.custo = arred(v.custo - custoVolta); v.lucro = arred(v.valor - v.custo);
+    v.serials = (v.serials || []).filter(s => !escolhidas.some(u => u.serial === s));
+    v.devolvido = {qty:(v.devolvido?.qty || 0) + q, reembolso:arred((v.devolvido?.reembolso || 0) + reembolso)};
+    db.moves.push({id, tipo:'devolucao', data, productId:v.productId, qty:q, vendaId:v.id, reembolso, valor:-reembolso, destino,
+      cliente:v.cliente || '', motivo:destino === 'defeito' ? 'Defeito' : 'Devolução', serials:escolhidas.map(u => u.serial).filter(Boolean), obs:str(f.obs).trim(), ts:Date.now()});
+    let msg = `Devolução registrada: ${q} unidade(s) ${destino === 'estoque' ? 'voltaram ao estoque' : 'foram baixadas por defeito'}`
+      + (reembolso ? `, ${reembolso.toFixed(2).replace('.', ',')} devolvido(s) ao cliente.` : ', sem devolver dinheiro.');
+    if(troca){
+      addVenda(db, {produto:f.trocaProduto, qtd:f.trocaQtd, preco:f.trocaPreco, seriais:f.trocaSeriais, data, cliente:v.cliente || '',
+        pagamento:f.pagamento || v.pagamento, garantia:f.garantia, obs:`Troca de venda de ${fmtDate(v.data)}`});
+      msg += ' Nova venda registrada.';
+    }
+    if(aviso.length) msg += ` ${aviso.length} unidade(s) ainda na garantia do fornecedor até ${fmtDate(aviso.map(g => g.ate).sort()[0])}. Peça a troca antes do prazo.`;
+    return msg;
+  }catch(e){
+    Object.keys(db).forEach(k => { db[k] = antes[k]; });
+    throw e;
+  }
 }
 
 export function addBaixa(db, f){
