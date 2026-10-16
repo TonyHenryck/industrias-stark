@@ -1,10 +1,10 @@
 import { sum } from './util.js';
 
-export const emptyDb = () => ({products:[], units:[], moves:[], customers:[], suppliers:[], bills:[]});
+export const emptyDb = () => ({products:[], units:[], moves:[], customers:[], suppliers:[], bills:[], metas:[]});
 export const isDb = d => !!d && Array.isArray(d.products) && Array.isArray(d.units) && Array.isArray(d.moves);
 
 /** Bancos e backups antigos não têm clientes nem fornecedores: completa o que faltar. */
-export const normalizar = d => { d.customers ??= []; d.suppliers ??= []; d.bills ??= []; return d; };
+export const normalizar = d => { d.customers ??= []; d.suppliers ??= []; d.bills ??= []; d.metas ??= []; return d; };
 
 export const norm = s => String(s ?? '').trim().toLowerCase();
 /** Acha um cadastro pelo nome (sem diferenciar maiúsculas); usado para ligar vendas e entradas. */

@@ -1,9 +1,9 @@
 import { emptyDb } from '../domain/queries.js';
 import { diffRows } from './diff.js';
 
-const TABLES = ['products', 'units', 'moves', 'customers', 'suppliers', 'bills'];
-/** Tabelas das etapas 2 e 3 (clientes, fornecedores e contas): se ainda não existem no Supabase, o app abre sem elas em vez de quebrar. */
-const OPCIONAIS = ['customers', 'suppliers', 'bills'];
+const TABLES = ['products', 'units', 'moves', 'customers', 'suppliers', 'bills', 'metas'];
+/** Tabelas das etapas 2 e 3 (clientes, fornecedores, contas e metas): se ainda não existem no Supabase, o app abre sem elas em vez de quebrar. */
+const OPCIONAIS = ['customers', 'suppliers', 'bills', 'metas'];
 const tabelaAusente = e => /PGRST205|42P01|schema cache|does not exist/i.test(`${e?.code} ${e?.message}`);
 const PAGE = 1000, CHUNK = 500;
 

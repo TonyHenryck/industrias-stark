@@ -110,6 +110,26 @@ export function balanco(db, periodo, ref = hoje()){
   };
 }
 
+/* ---------- metas do mês ---------- */
+
+/**
+ * Andamento das metas do mês de `ref`. Sem meta própria no mês, vale a do último mês que teve uma (`herdada`).
+ * Realizado: receita das vendas e lucro líquido do mês (mesmos números do Balanço).
+ */
+export function progressoMetas(db, ref = hoje()){
+  const mes = ref.slice(0, 7);
+  const meta = (db.metas || []).filter(m => m.mes <= mes).sort((a, b) => b.mes.localeCompare(a.mes))[0] || null;
+  const b = balanco(db, 'mes', ref);
+  const item = (alvo, feito) => ({alvo, feito, pct: alvo > 0 ? feito / alvo * 100 : 0, falta: Math.max(alvo - feito, 0)});
+  return {
+    mes, meta: !!meta, herdada: !!meta && meta.mes !== mes,
+    vendas: meta && meta.vendas > 0 ? item(meta.vendas, b.receita) : null,
+    lucro: meta && meta.lucro > 0 ? item(meta.lucro, b.lucroLiquido) : null,
+    diasRestantes: diasEntre(ref, ultimoDia(mes)),
+    valores: meta ? {vendas: meta.vendas, lucro: meta.lucro} : {vendas: 0, lucro: 0},
+  };
+}
+
 /* ---------- contas a receber e a pagar ---------- */
 
 /** 'pago' | 'vencida' | 'hoje' | 'aVencer' (contas canceladas não entram nas listas). */

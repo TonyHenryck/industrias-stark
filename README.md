@@ -20,7 +20,7 @@ Os módulos ES exigem servidor HTTP; abrir o `index.html` direto pelo arquivo n�
 5. **Project Settings > API:** copie a *Project URL* e a chave *anon public* para `src/config.js`.
 6. Para levar os dados do protótipo antigo: no navegador onde ele funcionava, aba **Dados**, copie o *Backup completo em JSON*; depois, já logado na versão nova, cole em **Importar backup**.
 
-Cada produto, unidade, movimentação, cliente e fornecedor é uma linha com o JSON em `data`. O `schema.sql` pode ser rodado de novo sempre que o sistema ganhar uma tabela (as tabelas `customers`, `suppliers` e `bills` vieram depois, e o espaço de fotos também); enquanto elas não existem, o app abre normalmente e avisa ao tentar gravar um cliente, fornecedor ou conta. A cada operação o app relê os dados do servidor, aplica a regra e grava só as linhas que mudaram; alterações da outra pessoa aparecem em tempo real no Painel, Unidades e Histórico.
+Cada produto, unidade, movimentação, cliente e fornecedor é uma linha com o JSON em `data`. O `schema.sql` pode ser rodado de novo sempre que o sistema ganhar uma tabela (as tabelas `customers`, `suppliers`, `bills` e `metas` vieram depois, e o espaço de fotos também); enquanto elas não existem, o app abre normalmente e avisa ao tentar gravar um cliente, fornecedor, conta ou meta. A cada operação o app relê os dados do servidor, aplica a regra e grava só as linhas que mudaram; alterações da outra pessoa aparecem em tempo real no Painel, Unidades e Histórico.
 
 Limite conhecido: se vocês dois confirmarem uma venda no mesmo instante, a última gravação vence. Para esse uso a janela é de milissegundos; se virar problema, o passo seguinte é mover as operações para funções SQL transacionais.
 
@@ -91,3 +91,7 @@ As funções de `domain/` recebem o `db` como primeiro argumento e lançam `Doma
 2. Fotos por produto e por unidade (Supabase Storage).
 3. Relatórios por período e por canal de venda.
 4. Integração com o catálogo HTML para publicar no Netlify, com preços vindos do estoque.
+
+## Metas do mês
+
+No Painel, o cartão "Metas" mostra dois anéis: **vendas** (receita do mês) e **lucro líquido** (o mesmo número do Balanço). Defina os valores em "Definir metas". Sem meta própria no mês, vale a do último mês que teve uma, com um aviso. Deixar os dois campos vazios remove a meta. As metas ficam na tabela `metas` (rode o `schema.sql` de novo para criá-la).

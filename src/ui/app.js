@@ -11,7 +11,7 @@ import { clientesRows } from './views/clientes.js';
 import { garantiaRows } from './views/movimentos.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto } from '../domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta } from '../domain/operations.js';
 import { expText } from '../domain/reports.js';
 import { CATALOGO_XDISTRIBUIDORA, FORNECEDOR_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
@@ -172,6 +172,7 @@ const FORMS = {
   cliente: f => salvarCliente(state.db, f),
   fornecedor: f => salvarFornecedor(state.db, f),
   conta: f => addContaPagar(state.db, f),
+  meta: f => salvarMeta(state.db, f),
 };
 
 document.addEventListener('click', async e => {
