@@ -1019,3 +1019,75 @@ describe('Metas do mês', () => {
     assert.deepEqual(db.metas, []);
   });
 });
+
+describe('pagamento parcial de contas', () => {
+  const ref = '2026-10-12';
+  const aReceber = () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'1', custo:'100'});
+    venda(db, p, {cliente:'Maria', preco:'300', data:'2026-10-01', recebimento:'receber', vencimento:'2026-10-05', parcelas:'1'});
+    return db;
+  };
+
+  test('recebe parte: a conta fecha pelo valor recebido e o restante vira outra conta pendente', () => {
+    const db = aReceber();
+    const id = db.bills[0].id;
+    assert.equal(pagarConta(db, id, '2026-10-12', {valor:'100', vencimento:'2026-10-30'}), 'Recebimento parcial registrado. Falta 200,00.');
+    const [pg, resto] = db.bills;
+    assert.deepEqual([pg.status, pg.valor, pg.valorOriginal, pg.dataPagamento], ['pago', 100, 300, '2026-10-12']);
+    assert.deepEqual([resto.status, resto.valor, resto.vencimento, resto.restanteDe, resto.moveId], ['pendente', 200, '2026-10-30', id, pg.moveId]);
+    const b = balanco(db, 'tudo', ref);
+    assert.equal(b.recebimentos, 100);                       // só o que entrou no caixa
+    assert.equal(b.aReceber, 200);
+    assert.equal(contas(db, {}, ref).receber, 200);
+  });
+
+  test('sem vencimento informado o restante mantém o da original; valor vazio paga tudo', () => {
+    const db = aReceber();
+    pagarConta(db, db.bills[0].id, '2026-10-12', {valor:'50'});
+    assert.equal(db.bills[1].vencimento, '2026-10-05');
+    const db2 = aReceber();
+    assert.equal(pagarConta(db2, db2.bills[0].id, '2026-10-12', {valor:''}), 'Recebimento registrado.');
+    assert.equal(db2.bills.length, 1);
+    assert.equal(db2.bills[0].valorOriginal, undefined);
+  });
+
+  test('valida o valor e a data do restante antes de gravar', () => {
+    const db = aReceber();
+    const id = db.bills[0].id;
+    erro(() => pagarConta(db, id, '2026-10-12', {valor:'0'}), 'maior que zero');
+    erro(() => pagarConta(db, id, '2026-10-12', {valor:'abc'}), 'maior que zero');
+    erro(() => pagarConta(db, id, '2026-10-12', {valor:'300,01'}), 'não pode passar');
+    erro(() => pagarConta(db, id, '2026-10-12', {valor:'100', vencimento:'30/10'}), 'vencimento do restante');
+    assert.deepEqual([db.bills.length, db.bills[0].status, db.bills[0].valor], [1, 'pendente', 300]);
+  });
+
+  test('conta avulsa a pagar: a despesa nasce só do valor pago', () => {
+    const db = emptyDb();
+    addContaPagar(db, {categoria:'Anúncios', valor:'200', vencimento:'2026-10-15', parcelas:'1'});
+    pagarConta(db, db.bills[0].id, '2026-10-12', {valor:'80'});
+    assert.deepEqual(db.moves.filter(m => m.tipo === 'despesa').map(m => m.valor), [80]);
+    pagarConta(db, db.bills[1].id, '2026-10-13');            // o restante (120) paga normalmente
+    assert.deepEqual(db.moves.filter(m => m.tipo === 'despesa').map(m => m.valor), [80, 120]);
+  });
+
+  test('desfazer volta ao valor original e remove o restante; bloqueia se o restante já foi pago', () => {
+    const db = aReceber();
+    pagarConta(db, db.bills[0].id, '2026-10-12', {valor:'100'});
+    const [primeira, resto] = db.bills;
+    pagarConta(db, resto.id, '2026-10-13');
+    erro(() => desfazerPagamento(db, primeira.id), 'restante');
+    desfazerPagamento(db, resto.id);
+    desfazerPagamento(db, primeira.id);
+    assert.equal(db.bills.length, 1);
+    assert.deepEqual([db.bills[0].status, db.bills[0].valor, db.bills[0].valorOriginal, db.bills[0].restanteId], ['pendente', 300, undefined, undefined]);
+  });
+
+  test('cancelar a venda cancela também o restante', () => {
+    const db = aReceber();
+    pagarConta(db, db.bills[0].id, '2026-10-12', {valor:'100'});
+    const msg = cancelarVenda(db, db.moves.find(m => m.tipo === 'venda').id);
+    assert.match(msg, /1 parcela\(s\) já tinha/);
+    assert.deepEqual(db.bills.map(b => b.status), ['cancelada', 'cancelada']);
+  });
+});
