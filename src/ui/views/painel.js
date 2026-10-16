@@ -2,28 +2,31 @@ import { esc, brl, nf, badge, fmtDate } from '../format.js';
 import { stock, avgCost, units, nomeProd, situacao } from '../../domain/queries.js';
 import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas, garantiasVencendo } from '../../domain/reports.js';
 import { sum } from '../../domain/util.js';
-import { colunas, barras } from '../charts.js';
+import { colunas, barras, linhas, sparkline, rosca } from '../charts.js';
 import { periodoSelect } from '../shared.js';
 
-const kpi = (l, v, s = '', cls = '') => `<div class="kpi"><span>${l}</span><strong class="${cls}">${v}</strong>${s ? `<small>${s}</small>` : ''}</div>`;
+const kpi = (l, v, s = '', cls = '', tom = '', spark = '') => `<div class="kpi ${tom}"><span>${l}</span><strong class="${cls}">${v}</strong>${s ? `<small>${s}</small>` : ''}${spark}</div>`;
 
 function graficoVendas(db, periodo, metrica){
   const {mensal, pontos} = serieVendas(db, periodo);
-  const lucro = metrica === 'lucro';
-  const nome = `${lucro ? 'Lucro bruto' : 'Receita'} por ${mensal ? 'mês' : 'dia'}`;
-  const seg = `<div class="seg" role="group" aria-label="Métrica do gráfico">
-      <button type="button" class="${lucro ? '' : 'on'}" data-act="metrica" data-v="receita" aria-pressed="${!lucro}">Receita</button>
-      <button type="button" class="${lucro ? 'on' : ''}" data-act="metrica" data-v="lucro" aria-pressed="${lucro}">Lucro</button></div>`;
-  const dados = pontos.map(p => ({
-    rotulo: p.rotulo, valor: lucro ? p.lucro : p.receita,
-    tip: `${p.rotulo}: ${brl(lucro ? p.lucro : p.receita)} · ${p.qtd} un. vendida(s)`,
-  }));
+  const cmp = metrica === 'comparar', lucro = metrica === 'lucro';
+  const nome = cmp ? `Receita e lucro por ${mensal ? 'mês' : 'dia'}` : `${lucro ? 'Lucro bruto' : 'Receita'} por ${mensal ? 'mês' : 'dia'}`;
+  const op = (v, t) => `<button type="button" class="${metrica === v || (v === 'receita' && !cmp && !lucro) ? 'on' : ''}" data-act="metrica" data-v="${v}" aria-pressed="${metrica === v || (v === 'receita' && !cmp && !lucro)}">${t}</button>`;
+  const seg = `<div class="seg" role="group" aria-label="Métrica do gráfico">${op('receita', 'Receita')}${op('lucro', 'Lucro')}${op('comparar', 'Comparar')}</div>`;
   const temVenda = pontos.some(p => p.receita > 0);
-  return `<section class="card">
-    <div class="card-head"><h2>${nome}</h2>${seg}</div>
-    ${temVenda ? colunas({pontos: dados, nome, colunaTabela: lucro ? 'Lucro bruto' : 'Receita'})
-               : '<p class="empty">Nenhuma venda neste período.</p>'}
-  </section>`;
+  let corpo;
+  if(!temVenda) corpo = '<p class="empty">Nenhuma venda neste período.</p>';
+  else if(cmp) corpo = linhas({
+    nome, rotulos: pontos.map(p => p.rotulo),
+    series: [{nome: 'Receita', valores: pontos.map(p => p.receita)}, {nome: 'Lucro bruto', valores: pontos.map(p => p.lucro)}],
+    tips: pontos.map(p => `${p.rotulo}: receita ${brl(p.receita)} · lucro ${brl(p.lucro)}`),
+  });
+  else corpo = colunas({
+    nome, colunaTabela: lucro ? 'Lucro bruto' : 'Receita',
+    pontos: pontos.map(p => ({rotulo: p.rotulo, valor: lucro ? p.lucro : p.receita,
+      tip: `${p.rotulo}: ${brl(lucro ? p.lucro : p.receita)} · ${p.qtd} un. vendida(s)`})),
+  });
+  return `<section class="card"><div class="card-head"><h2>${nome}</h2>${seg}</div>${corpo}</section>`;
 }
 
 export default ({db, periodo, metrica}) => {
@@ -34,15 +37,16 @@ export default ({db, periodo, metrica}) => {
   const clientes = topClientes(db, periodo);
   const ct = contas(db);
   const gv = garantiasVencendo(db);
+  const serie = serieVendas(db, periodo).pontos;
   const ticket = b.vendasQtd ? b.receita / b.vendasQtd : 0;
 
   const topHtml = top.length ? barras(top.map(t => ({
     rotulo: t.nome, sub: `${nf(t.qtd)} un. · margem ${nf(t.margem, 0)}%`, valor: Math.max(t.lucro, 0), texto: brl(t.lucro),
   }))) : '<p class="empty">Nenhuma venda neste período.</p>';
 
-  const pagHtml = b.porPagamento.length ? barras(b.porPagamento.map(p => ({
+  const pagHtml = b.porPagamento.length ? rosca(b.porPagamento.slice(0, 3).map(p => ({
     rotulo: p.forma, sub: `${nf(p.qtd)} venda(s) · ${nf(p.pct, 0)}%`, valor: p.valor, texto: brl(p.valor),
-  }))) : '<p class="empty">Nenhuma venda neste período.</p>';
+  })), {rotulo: 'Receita', texto: brl(b.receita)}) : '<p class="empty">Nenhuma venda neste período.</p>';
 
   const comEntrada = db.products.filter(p => situacao(db, p)[0] !== '');
   const semEntrada = db.products.length - comEntrada.length;
@@ -57,10 +61,10 @@ export default ({db, periodo, metrica}) => {
     <small class="sub">Teste os aparelhos e devolva os defeituosos antes do prazo.</small></section>` : ''}
   ${periodoSelect(periodo)}
   <div class="kpis">
-    ${kpi('Em estoque', `${nf(disp.length)} un.`, `Custo ${brl(b.dinheiroParado)}`)}
-    ${kpi('Receita', brl(b.receita), `${nf(b.vendasQtd)} venda(s)`)}
-    ${kpi('Lucro líquido', brl(b.lucroLiquido), `Margem ${nf(b.margemLiquida, 1)}%`, b.lucroLiquido < 0 ? 'neg' : '')}
-    ${kpi('Despesas e perdas', brl(b.despesas + b.perdas), `Despesas ${brl(b.despesas)} · perdas ${brl(b.perdas)}`)}
+    ${kpi('Em estoque', `${nf(disp.length)} un.`, `Custo ${brl(b.dinheiroParado)}`, '', 'azul')}
+    ${kpi('Receita', brl(b.receita), `${nf(b.vendasQtd)} venda(s)`, '', 'roxo', sparkline(serie.map(p => p.receita)))}
+    ${kpi('Lucro líquido', brl(b.lucroLiquido), `Margem ${nf(b.margemLiquida, 1)}%`, b.lucroLiquido < 0 ? 'neg' : '', 'verde', sparkline(serie.map(p => p.lucro)))}
+    ${kpi('Despesas e perdas', brl(b.despesas + b.perdas), `Despesas ${brl(b.despesas)} · perdas ${brl(b.perdas)}`, '', 'rosa')}
     ${kpi('Ticket médio', brl(ticket), 'por venda')}
   </div>
   ${graficoVendas(db, periodo, metrica)}
