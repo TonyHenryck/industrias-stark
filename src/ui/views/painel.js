@@ -1,8 +1,8 @@
 import { esc, brl, nf, badge, fmtDate } from '../format.js';
 import { stock, avgCost, units, nomeProd, situacao } from '../../domain/queries.js';
-import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas, garantiasVencendo } from '../../domain/reports.js';
+import { resumo, balanco, progressoMetas, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas, garantiasVencendo } from '../../domain/reports.js';
 import { sum } from '../../domain/util.js';
-import { colunas, barras, linhas, sparkline, rosca } from '../charts.js';
+import { colunas, barras, linhas, sparkline, rosca, anel } from '../charts.js';
 import { periodoSelect } from '../shared.js';
 
 const kpi = (l, v, s = '', cls = '', tom = '', spark = '') => `<div class="kpi ${tom}"><span>${l}</span><strong class="${cls}">${v}</strong>${s ? `<small>${s}</small>` : ''}${spark}</div>`;
@@ -27,6 +27,32 @@ function graficoVendas(db, periodo, metrica){
       tip: `${p.rotulo}: ${brl(lucro ? p.lucro : p.receita)} · ${p.qtd} un. vendida(s)`})),
   });
   return `<section class="card"><div class="card-head"><h2>${nome}</h2>${seg}</div>${corpo}</section>`;
+}
+
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+function cartaoMetas(db){
+  const m = progressoMetas(db);
+  const [ano, mes] = m.mes.split('-');
+  const nome = `${MESES[+mes - 1]} de ${ano}`;
+  const aneis = [
+    m.vendas && anel({pct: m.vendas.pct, titulo: 'Meta de vendas', feito: brl(m.vendas.feito), alvo: brl(m.vendas.alvo), falta: brl(m.vendas.falta), cor: 'var(--c-vendas)'}),
+    m.lucro && anel({pct: m.lucro.pct, titulo: 'Meta de lucro líquido', feito: brl(m.lucro.feito), alvo: brl(m.lucro.alvo), falta: brl(m.lucro.falta), cor: 'var(--c-lucro)'}),
+  ].filter(Boolean).join('');
+  const v = m.valores;
+  return `<section class="card">
+    <div class="card-head"><h2>Metas de ${nome}</h2><span class="sub">${m.diasRestantes ? `Faltam ${m.diasRestantes} dia(s) para fechar o mês` : 'Último dia do mês'}</span></div>
+    ${aneis ? `<div class="aneis">${aneis}</div>` : '<p class="empty">Defina quanto você quer vender e lucrar neste mês para acompanhar o andamento aqui.</p>'}
+    ${m.herdada ? '<p class="hint" style="margin:12px 0 0">Usando as metas do mês anterior. Salve de novo para definir as deste mês.</p>' : ''}
+    <details class="viz-table"><summary>${m.meta ? 'Alterar metas' : 'Definir metas'}</summary>
+      <form data-form="meta" class="form" style="margin-top:12px">
+        <label>Meta de vendas do mês (R$)<input name="vendas" type="number" step="0.01" min="0" value="${v.vendas || ''}"></label>
+        <label>Meta de lucro líquido do mês (R$)<input name="lucro" type="number" step="0.01" min="0" value="${v.lucro || ''}"></label>
+        <div class="actions wide"><button class="btn primary" type="submit">Salvar metas</button></div>
+      </form>
+      <p class="hint" style="margin:8px 0 0">Vendas = receita do mês; lucro = lucro líquido do Balanço. Deixe os dois vazios para remover.</p>
+    </details>
+  </section>`;
 }
 
 export default ({db, periodo, metrica}) => {
@@ -67,6 +93,7 @@ export default ({db, periodo, metrica}) => {
     ${kpi('Despesas e perdas', brl(b.despesas + b.perdas), `Despesas ${brl(b.despesas)} · perdas ${brl(b.perdas)}`, '', 'rosa')}
     ${kpi('Ticket médio', brl(ticket), 'por venda')}
   </div>
+  ${cartaoMetas(db)}
   ${graficoVendas(db, periodo, metrica)}
   <div class="cols2">
     <section class="card"><h2>Produtos que mais deram lucro</h2>${topHtml}</section>

@@ -17,11 +17,12 @@ create table if not exists public.moves     (id text primary key, data jsonb not
 create table if not exists public.customers (id text primary key, data jsonb not null);
 create table if not exists public.suppliers (id text primary key, data jsonb not null);
 create table if not exists public.bills     (id text primary key, data jsonb not null);
+create table if not exists public.metas     (id text primary key, data jsonb not null);
 
 do $$
 declare t text;
 begin
-  foreach t in array array['products','units','moves','customers','suppliers','bills'] loop
+  foreach t in array array['products','units','moves','customers','suppliers','bills','metas'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "membros" on public.%I', t);
     execute format('create policy "membros" on public.%I for all to authenticated using (public.is_member()) with check (public.is_member())', t);

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.js';
 import { DomainError } from '../src/domain/errors.js';
 import { somaMeses } from '../src/domain/util.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, MAX_FOTOS } from '../src/domain/operations.js';
-import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo } from '../src/domain/reports.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, MAX_FOTOS } from '../src/domain/operations.js';
+import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo, progressoMetas } from '../src/domain/reports.js';
 import { parseDias, garantiaAte, situacaoGarantia, garantiaDoFornecedor, GARANTIA_PADRAO } from '../src/domain/garantia.js';
 
 const novoProduto = (db, extra={}) => {
@@ -972,5 +972,50 @@ describe('garantias', () => {
     assert.deepEqual(r.map(x => [x.nome, x.qtd, x.ate, x.dias]), [['A', 3, '2026-10-18', 6]]);
     venda(db, a, {qtd:'3', preco:'100'});                            // vendeu tudo: nada mais a devolver
     assert.deepEqual(garantiasVencendo(db, ref, 15), []);
+  });
+});
+
+describe('Metas do mês', () => {
+  const ref = '2026-10-15';
+  const comVenda = () => {
+    const db = emptyDb(), p = novoProduto(db, {custoPadrao:'100'});
+    entrada(db, p, {qtd:'5', custo:'100', data:'2026-10-01'});
+    venda(db, p, {qtd:'2', preco:'300', data:'2026-10-10'});          // receita 600, lucro bruto 400
+    return db;
+  };
+  test('valida e salva a meta do mês atual', () => {
+    const db = emptyDb();
+    erro(() => salvarMeta(db, {vendas:'-5', lucro:''}, ref), 'meta de vendas');
+    erro(() => salvarMeta(db, {vendas:'abc', lucro:''}, ref), 'meta de vendas');
+    assert.equal(salvarMeta(db, {vendas:'1000', lucro:'400,50'}, ref), 'Metas do mês salvas.');
+    assert.deepEqual(db.metas.map(m => [m.id, m.vendas, m.lucro]), [['2026-10', 1000, 400.5]]);
+    salvarMeta(db, {vendas:'2000', lucro:''}, ref);                    // salvar de novo troca, não duplica
+    assert.deepEqual(db.metas.map(m => [m.vendas, m.lucro]), [[2000, 0]]);
+    assert.equal(salvarMeta(db, {vendas:'', lucro:''}, ref), 'Metas do mês removidas.');
+    assert.deepEqual(db.metas, []);
+  });
+  test('progresso usa a receita e o lucro líquido do mês', () => {
+    const db = comVenda();
+    assert.equal(progressoMetas(db, ref).meta, false);
+    salvarMeta(db, {vendas:'1200', lucro:'200'}, ref);
+    const m = progressoMetas(db, ref);
+    assert.deepEqual([m.vendas.feito, m.vendas.pct, m.vendas.falta], [600, 50, 600]);
+    assert.equal(m.lucro.feito, 400);
+    assert.equal(m.lucro.pct, 200);                                    // passa de 100%: o texto mostra o real
+    assert.equal(m.lucro.falta, 0);
+    assert.equal(m.diasRestantes, 16);
+  });
+  test('sem meta no mês vale a do último mês que teve uma; mês futuro não vale', () => {
+    const db = comVenda();
+    salvarMeta(db, {vendas:'1000', lucro:''}, '2026-09-20');
+    const m = progressoMetas(db, ref);
+    assert.equal(m.herdada, true);
+    assert.equal(m.vendas.alvo, 1000);
+    assert.equal(m.lucro, null);
+    assert.equal(progressoMetas(db, '2026-08-15').meta, false);
+  });
+  test('backup antigo sem metas é aceito', () => {
+    const db = parseBackup(JSON.stringify({products:[], units:[], moves:[]}));
+    assert.deepEqual(db.metas, []);
   });
 });

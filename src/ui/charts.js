@@ -110,6 +110,22 @@ export function sparkline(valores){
 }
 
 /**
+ * Anel de progresso de uma meta. O percentual real aparece escrito (pode passar de 100%); o anel enche até 100%.
+ * `cor`: valor CSS da cor do anel.
+ */
+export function anel({pct, titulo, feito, alvo, cor, falta}){
+  const cheio = Math.min(Math.max(pct, 0), 100);
+  return `<div class="anel">
+    <div class="anel-ring" style="--p:${cheio.toFixed(1)}%;--cor:${cor}" role="img" aria-label="${esc(titulo)}: ${Math.round(pct)}% da meta">
+      <div class="anel-hole"><strong>${Math.round(pct)}%</strong></div>
+    </div>
+    <div class="anel-txt"><b>${esc(titulo)}</b>
+      <span>${esc(feito)} de ${esc(alvo)}</span>
+      <small>${pct >= 100 ? 'Meta batida' : `Faltam ${esc(falta)}`}</small></div>
+  </div>`;
+}
+
+/**
  * Rosca (parte do todo, até 6 fatias). `itens`: [{rotulo, valor, texto, sub?}]; `centro`: {rotulo, texto}.
  * A legenda traz o valor de cada fatia, então a cor nunca é a única informação.
  */

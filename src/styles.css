@@ -5,7 +5,7 @@
   --ok:#6ee7b7; --warn:#fbbf24; --bad:#fb7185;
   --glass:linear-gradient(150deg,rgba(255,255,255,.085),rgba(255,255,255,.02));
   --glass-edge:inset 0 1px 0 rgba(255,255,255,.10);
-  --c1:#3987e5; --c2:#d95926; --c3:#199e70;
+  --c-vendas:#8b7cf6; --c-lucro:#199e70; --c1:#3987e5; --c2:#d95926; --c3:#199e70;
   --side-w:216px; --side-w-collapsed:76px;
   color-scheme: dark;
 }
@@ -303,3 +303,16 @@ tbody tr:hover{background:rgba(255,255,255,.035)}
 .donut-leg i{width:10px;height:10px;border-radius:50%}
 .donut-leg small{display:block;color:var(--muted);font-size:11px}
 .donut-leg b{font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* ---------- metas em anéis ---------- */
+.aneis{display:flex;flex-wrap:wrap;gap:20px 40px}
+.anel{display:flex;align-items:center;gap:16px;min-width:0}
+.anel-ring{flex:none;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;
+  background:conic-gradient(var(--cor) var(--p),rgba(255,255,255,.09) 0)}
+.anel-hole{width:74px;height:74px;border-radius:50%;background:#14131f;display:grid;place-items:center}
+.anel-hole strong{font-size:18px;font-weight:600}
+.anel-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.anel-txt span{color:var(--ink);font-variant-numeric:tabular-nums}
+.anel-txt small{color:var(--muted);font-size:12px}
+details.viz-table form{max-width:620px}
+.card-head .sub{margin:0}

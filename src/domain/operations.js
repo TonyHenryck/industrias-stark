@@ -239,6 +239,24 @@ export function excluirDespesa(db, id){
   return 'Despesa excluída.';
 }
 
+/* ---------- metas do mês ---------- */
+
+/** Define as metas de receita e de lucro líquido do mês atual. Os dois campos vazios apagam a meta do mês. */
+export function salvarMeta(db, f, ref = hoje()){
+  const mes = ref.slice(0, 7);
+  const num = (v, nome) => {
+    if(str(v).trim() === '') return 0;
+    const n = parseFloat(str(v).replace(',', '.'));
+    if(isNaN(n) || n < 0) fail(`A meta de ${nome} deve ser um valor positivo.`);
+    return n;
+  };
+  const vendas = num(f.vendas, 'vendas'), lucro = num(f.lucro, 'lucro');
+  db.metas = (db.metas || []).filter(m => m.id !== mes);
+  if(!vendas && !lucro) return 'Metas do mês removidas.';
+  db.metas.push({id:mes, mes, vendas, lucro, ts:Date.now()});
+  return 'Metas do mês salvas.';
+}
+
 /* ---------- contas a receber e a pagar ---------- */
 
 export function addContaPagar(db, f){
