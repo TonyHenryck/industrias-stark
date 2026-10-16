@@ -12,7 +12,7 @@ import { garantiaRows } from './views/movimentos.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
 import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, devolverVenda } from '../domain/operations.js';
-import { expText } from '../domain/reports.js';
+import { expText, conferirCaixa } from '../domain/reports.js';
 import { CATALOGO_XDISTRIBUIDORA, FORNECEDOR_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
 let store, unsubscribe = () => {}, busy = false;
@@ -228,6 +228,11 @@ document.addEventListener('submit', async e => {
     try{ await store.auth.signIn(dados.email, dados.password); }
     catch(err){ renderLogin('E-mail ou senha inválidos.'); }
     return;
+  }
+  if(k==='conferencia'){
+    try{ state.conferencia = {campos: dados, resultado: conferirCaixa(state.db, dados)}; }
+    catch(err){ if(!(err instanceof DomainError)) throw err; state.conferencia = {campos: dados, erro: err.message}; }
+    render(); return;
   }
   if(FORMS[k] && await run(() => FORMS[k](dados))){
     if(k==='produto') state.editId = null;

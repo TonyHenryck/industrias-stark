@@ -4,7 +4,7 @@ import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.
 import { DomainError } from '../src/domain/errors.js';
 import { somaMeses } from '../src/domain/util.js';
 import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, devolverVenda, MAX_FOTOS } from '../src/domain/operations.js';
-import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo, progressoMetas } from '../src/domain/reports.js';
+import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo, progressoMetas, conferirCaixa, primeirosPassos } from '../src/domain/reports.js';
 import { parseDias, garantiaAte, situacaoGarantia, garantiaDoFornecedor, GARANTIA_PADRAO } from '../src/domain/garantia.js';
 
 const novoProduto = (db, extra={}) => {
@@ -1181,5 +1181,55 @@ describe('devolução e troca', () => {
     erro(() => devolverVenda(db, {venda:v.id, seriais:'S1', troca:'sim', trocaProduto:'', trocaQtd:'1', trocaPreco:'400'}), 'Escolha o produto');
     assert.equal(JSON.stringify(db), antes);
     assert.equal(db.moves.find(m => m.id === v.id).qty, 2);   // o rollback troca os objetos: confira pelo id
+  });
+});
+
+describe('conferência de caixa e primeiros passos', () => {
+  const ref = '2026-10-20';
+  const base = () => {
+    const db = emptyDb(), p = novoProduto(db);
+    entrada(db, p, {qtd:'2', custo:'100', data:'2026-10-01'});         // saiu 200
+    venda(db, p, {preco:'300', data:'2026-10-05'});                    // entrou 300
+    addDespesa(db, {categoria:'Frete', valor:'20', data:'2026-10-06'}); // saiu 20
+    return db;
+  };
+
+  test('compara o dinheiro real com o saldo do sistema, considerando o que você já tinha', () => {
+    const db = base();                                                  // saldo do sistema: 300 - 200 - 20 = 80
+    let c = conferirCaixa(db, {real:'80'}, ref);
+    assert.deepEqual([c.sistema, c.esperado, c.diferenca, c.situacao], [80, 80, 0, 'bate']);
+    c = conferirCaixa(db, {real:'1080', inicial:'1000'}, ref);
+    assert.deepEqual([c.esperado, c.situacao], [1080, 'bate']);
+    c = conferirCaixa(db, {real:'95,50'}, ref);
+    assert.deepEqual([c.diferenca, c.situacao], [15.5, 'sobra']);
+    c = conferirCaixa(db, {real:'60'}, ref);
+    assert.deepEqual([c.diferenca, c.situacao], [-20, 'falta']);
+  });
+
+  test('a devolução entra na conferência e os dados inválidos são recusados', () => {
+    const db = base();
+    devolverVenda(db, {venda:db.moves.find(m => m.tipo === 'venda').id, qtd:'1'});   // devolveu os 300
+    assert.equal(conferirCaixa(db, {real:'-220'}, ref).situacao, 'bate');
+    erro(() => conferirCaixa(db, {real:''}, ref), 'Informe quanto dinheiro');
+    erro(() => conferirCaixa(db, {real:'abc'}, ref), 'Valor inválido');
+    erro(() => conferirCaixa(db, {real:'10', inicial:'x'}, ref), 'Valor inválido');
+  });
+
+  test('primeiros passos: cada etapa marca quando é feita e some quando as obrigatórias terminam', () => {
+    const db = emptyDb();
+    let r = primeirosPassos(db);
+    assert.deepEqual(r.passos.map(p => p.feito), [false, false, false, false, false]);
+    assert.equal(r.completo, false);
+    salvarFornecedor(db, {nome:'XDist'});
+    const p = novoProduto(db);
+    entrada(db, p, {qtd:'1', custo:'100'});
+    r = primeirosPassos(db);
+    assert.deepEqual(r.passos.map(x => x.feito), [true, true, true, false, false]);
+    venda(db, p, {preco:'300'});
+    r = primeirosPassos(db);
+    assert.equal(r.completo, true);                                    // a meta é opcional
+    assert.equal(r.passos.at(-1).feito, false);
+    cancelarVenda(db, db.moves.find(m => m.tipo === 'venda').id);
+    assert.equal(primeirosPassos(db).passos[3].feito, false);          // venda cancelada não conta
   });
 });

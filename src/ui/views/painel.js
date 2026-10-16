@@ -1,6 +1,6 @@
 import { esc, brl, nf, badge, fmtDate } from '../format.js';
 import { stock, avgCost, units, nomeProd, situacao } from '../../domain/queries.js';
-import { resumo, balanco, progressoMetas, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas, garantiasVencendo } from '../../domain/reports.js';
+import { resumo, balanco, progressoMetas, primeirosPassos, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas, garantiasVencendo } from '../../domain/reports.js';
 import { sum } from '../../domain/util.js';
 import { colunas, barras, linhas, sparkline, rosca, anel } from '../charts.js';
 import { periodoSelect } from '../shared.js';
@@ -30,6 +30,20 @@ function graficoVendas(db, periodo, metrica){
 }
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+function cartaoPrimeirosPassos(db){
+  const {passos, completo} = primeirosPassos(db);
+  if(completo) return '';
+  const feitos = passos.filter(p => p.feito).length;
+  return `<section class="card">
+    <div class="card-head"><h2>Primeiros passos</h2><span class="sub">${feitos} de ${passos.length}</span></div>
+    <ol class="passos">${passos.map(p => `<li class="${p.feito ? 'feito' : ''}">
+      <span class="passo-ico" aria-hidden="true">${p.feito ? '✓' : ''}</span>
+      <span class="passo-txt"><b>${p.texto}</b><small>${p.dica}</small></span>
+      ${p.feito ? badge('Feito', 'ok') : p.aba === 'painel' ? '' : `<button class="btn small primary" data-act="go" data-v="${p.aba}">Ir</button>`}
+    </li>`).join('')}</ol>
+  </section>`;
+}
 
 function cartaoMetas(db){
   const m = progressoMetas(db);
@@ -93,6 +107,7 @@ export default ({db, periodo, metrica}) => {
     ${kpi('Despesas e perdas', brl(b.despesas + b.perdas), `Despesas ${brl(b.despesas)} · perdas ${brl(b.perdas)}`, '', 'rosa')}
     ${kpi('Ticket médio', brl(ticket), 'por venda')}
   </div>
+  ${cartaoPrimeirosPassos(db)}
   ${cartaoMetas(db)}
   ${graficoVendas(db, periodo, metrica)}
   <div class="cols2">
