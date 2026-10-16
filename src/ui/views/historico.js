@@ -15,8 +15,8 @@ export function histRows({db, fHist}){
     <tbody>${list.map(m => {
       const det = [m.cliente, m.fornecedor, m.motivo, m.pagamento, m.aReceber ? 'A receber' : '', m.aPagar ? 'A pagar' : '', (m.serials||[]).length ? 'Séries: '+m.serials.join(', ') : '', m.obs]
         .filter(Boolean).join(' · ');
-      const tipoCls = m.tipo==='baixa' || m.tipo==='despesa' ? 'bad' : m.tipo==='entrada' ? 'ok' : '';
-      const acao = m.tipo==='venda' && !m.cancelada ? `<button class="btn small" data-act="cancelVenda" data-id="${m.id}">Cancelar venda</button>` : (m.cancelada ? badge('Cancelada','bad') : '');
+      const tipoCls = m.tipo==='baixa' || m.tipo==='despesa' || m.tipo==='devolucao' ? 'bad' : m.tipo==='entrada' ? 'ok' : '';
+      const acao = m.tipo==='venda' && !m.cancelada && !m.devolvido ? `<button class="btn small" data-act="cancelVenda" data-id="${m.id}">Cancelar venda</button>` : (m.cancelada ? badge('Cancelada','bad') : '');
       return `<tr><td>${fmtDate(m.data)}</td><td>${badge(TIPOS[m.tipo]||m.tipo, tipoCls)}</td><td>${esc(m.tipo==='despesa' ? m.categoria : nomeProd(prod(db, m.productId)))}</td>
         <td class="r">${m.qty ?? ''}</td><td class="r">${brl(m.valor)}</td><td style="white-space:normal;min-width:180px">${esc(det)}</td><td>${acao}</td></tr>`;
     }).join('')}</tbody></table></div>`;

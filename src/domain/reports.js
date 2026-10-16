@@ -71,6 +71,7 @@ export function balanco(db, periodo, ref = hoje()){
   const no = m => noPeriodo(m, periodo, ref);
   const vendas = db.moves.filter(m => m.tipo==='venda' && !m.cancelada && no(m));
   const baixas = db.moves.filter(m => m.tipo==='baixa' && no(m));
+  const devolucoes = db.moves.filter(m => m.tipo==='devolucao' && no(m));
   const despesas = db.moves.filter(m => m.tipo==='despesa' && no(m));
   const entradas = db.moves.filter(m => m.tipo==='entrada' && no(m));
 
@@ -82,11 +83,13 @@ export function balanco(db, periodo, ref = hoje()){
   // Caixa: venda a receber só entra quando a parcela é recebida; compra a pagar só sai quando é paga.
   const pagas = (db.bills || []).filter(b => b.status === 'pago' && no({data:b.dataPagamento}));
   const vendaViva = id => db.moves.some(m => m.id === id && m.tipo === 'venda' && !m.cancelada);
-  const vendasAVista = sum(vendas.filter(v => !v.aReceber), 'valor');
+  // O que entrou na venda à vista é o valor original; a devolução sai à parte, na data em que aconteceu.
+  const vendasAVista = vendas.filter(v => !v.aReceber).reduce((t, v) => t + v.valor + (v.devolvido?.reembolso || 0), 0);
+  const reembolsos = sum(devolucoes, 'reembolso');
   const recebimentos = sum(pagas.filter(b => b.tipo === 'receber' && vendaViva(b.moveId)), 'valor');
   const comprasAVista = sum(entradas.filter(e => !e.aPagar), 'valor');
   const comprasPagas = comprasAVista + sum(pagas.filter(b => b.tipo === 'pagar' && b.origem === 'entrada'), 'valor');
-  const entrou = vendasAVista + recebimentos, saiu = comprasPagas + gastos;
+  const entrou = vendasAVista + recebimentos, saiu = comprasPagas + gastos + reembolsos;
   const pendentes = (db.bills || []).filter(b => b.status === 'pendente');
   const emAberto = tipo => sum(pendentes.filter(b => b.tipo === tipo), 'valor');
   const vencido = tipo => sum(pendentes.filter(b => b.tipo === tipo && b.vencimento < ref), 'valor');
@@ -100,7 +103,7 @@ export function balanco(db, periodo, ref = hoje()){
   porCategoria.sort((a, b) => b.valor - a.valor);
 
   return {
-    vendasQtd: vendas.length, receita, custoVendido, lucroBruto, perdas, despesas: gastos, lucroLiquido,
+    vendasQtd: vendas.filter(v => v.qty > 0).length, reembolsos, receita, custoVendido, lucroBruto, perdas, despesas: gastos, lucroLiquido,
     margemLiquida: receita ? lucroLiquido / receita * 100 : 0,
     compras, comprasPagas, vendasAVista, recebimentos,
     caixaEntrou: entrou, caixaSaiu: saiu, saldo: entrou - saiu,

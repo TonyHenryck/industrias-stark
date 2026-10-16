@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.js';
 import { DomainError } from '../src/domain/errors.js';
 import { somaMeses } from '../src/domain/util.js';
-import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, MAX_FOTOS } from '../src/domain/operations.js';
+import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, devolverVenda, MAX_FOTOS } from '../src/domain/operations.js';
 import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo, progressoMetas } from '../src/domain/reports.js';
 import { parseDias, garantiaAte, situacaoGarantia, garantiaDoFornecedor, GARANTIA_PADRAO } from '../src/domain/garantia.js';
 
@@ -1089,5 +1089,97 @@ describe('pagamento parcial de contas', () => {
     const msg = cancelarVenda(db, db.moves.find(m => m.tipo === 'venda').id);
     assert.match(msg, /1 parcela\(s\) já tinha/);
     assert.deepEqual(db.bills.map(b => b.status), ['cancelada', 'cancelada']);
+  });
+});
+
+describe('devolução e troca', () => {
+  const ref = '2026-10-20';
+  const cenario = () => {
+    const db = emptyDb(), p = novoProduto(db), q = novoProduto(db, {nome:'Kron'});
+    entrada(db, p, {seriais:'S1\nS2\nS3', custo:'100', data:'2026-10-01', garantiaForn:'90'});
+    entrada(db, q, {qtd:'2', custo:'150', data:'2026-10-01'});
+    venda(db, p, {seriais:'S1\nS2', preco:'300', data:'2026-10-05', cliente:'Maria'});
+    return {db, p, q, v:db.moves.find(m => m.tipo === 'venda')};
+  };
+
+  test('devolve uma unidade ao estoque e reembolsa: receita, custo e caixa acompanham', () => {
+    const {db, p, v} = cenario();
+    assert.match(devolverVenda(db, {venda:v.id, seriais:'S2', data:'2026-10-10'}), /1 unidade\(s\) voltaram ao estoque, 300,00 devolvido/);
+    assert.deepEqual([v.qty, v.valor, v.custo, v.lucro, v.serials], [1, 300, 100, 200, ['S1']]);
+    assert.deepEqual([v.devolvido.qty, v.devolvido.reembolso], [1, 300]);
+    assert.equal(stock(db, p.id), 2);                                  // S2 voltou, S3 já estava
+    const b = balanco(db, 'tudo', ref);
+    assert.deepEqual([b.receita, b.custoVendido, b.lucroBruto], [300, 100, 200]);
+    assert.equal(b.caixaEntrou, 600);                                  // entrou o original da venda
+    assert.equal(b.reembolsos, 300);                                   // e saiu o que foi devolvido
+    assert.equal(db.moves.at(-1).tipo, 'devolucao');
+  });
+
+  test('devolução total deixa a venda com zero unidades e fora da contagem', () => {
+    const {db, v} = cenario();
+    devolverVenda(db, {venda:v.id, qtd:'2'});
+    assert.deepEqual([v.qty, v.valor, v.custo, v.lucro], [0, 0, 0, 0]);
+    const b = balanco(db, 'tudo', ref);
+    assert.deepEqual([b.vendasQtd, b.receita, b.caixaEntrou - b.reembolsos], [0, 0, 0]);
+    erro(() => devolverVenda(db, {venda:v.id, qtd:'1'}), 'nada a devolver');
+  });
+
+  test('defeito: a unidade vira baixa, o prejuízo é o custo menos o que foi mantido', () => {
+    const {db, v} = cenario();
+    const msg = devolverVenda(db, {venda:v.id, seriais:'S1', destino:'defeito', reembolso:'250', data:'2026-10-10'});
+    assert.match(msg, /baixadas por defeito/);
+    assert.match(msg, /garantia do fornecedor/);                       // ainda dentro dos 90 dias do fornecedor
+    assert.equal(units(db, db.products[0].id).length, 1);              // só S3 disponível
+    assert.equal(db.units.find(u => u.serial === 'S1').status, 'baixa');
+    assert.deepEqual([v.valor, v.custo, v.lucro], [350, 200, 150]);    // custo mantido: não voltou ao estoque
+  });
+
+  test('reembolso menor mantém a diferença como receita; zero não devolve dinheiro', () => {
+    const {db, v} = cenario();
+    devolverVenda(db, {venda:v.id, seriais:'S1', reembolso:'0'});
+    assert.deepEqual([v.valor, v.custo], [600, 100]);
+    assert.equal(db.moves.at(-1).reembolso, 0);
+  });
+
+  test('valida tudo antes de gravar', () => {
+    const {db, v} = cenario();
+    const antes = JSON.stringify(db);
+    erro(() => devolverVenda(db, {venda:'x'}), 'não encontrada');
+    erro(() => devolverVenda(db, {venda:v.id, qtd:'3'}), 'só tem 2');
+    erro(() => devolverVenda(db, {venda:v.id, qtd:''}), 'quantidade');
+    erro(() => devolverVenda(db, {venda:v.id, seriais:'S3'}), 'não faz parte');
+    erro(() => devolverVenda(db, {venda:v.id, qtd:'1', reembolso:'300,01'}), 'não pode passar');
+    erro(() => devolverVenda(db, {venda:v.id, qtd:'1', reembolso:'-1'}), 'valor devolvido');
+    erro(() => devolverVenda(db, {venda:v.id, qtd:'1', data:'10/10'}), 'Data inválida');
+    assert.equal(JSON.stringify(db), antes);
+  });
+
+  test('venda com parcelas em aberto não aceita devolução; cancelar não vale depois de devolver', () => {
+    const {db, p} = cenario();
+    venda(db, p, {seriais:'S3', preco:'300', cliente:'João', recebimento:'receber', vencimento:'2026-11-01', parcelas:'1'});
+    const aberta = db.moves.filter(m => m.tipo === 'venda').at(-1);
+    erro(() => devolverVenda(db, {venda:aberta.id, qtd:'1'}), 'parcelas a receber em aberto');
+    const v = db.moves.find(m => m.tipo === 'venda');
+    devolverVenda(db, {venda:v.id, qtd:'1'});
+    erro(() => cancelarVenda(db, v.id), 'já teve devolução');
+  });
+
+  test('troca: devolve e registra a nova venda junto, com o crédito do valor devolvido', () => {
+    const {db, q, v} = cenario();
+    const msg = devolverVenda(db, {venda:v.id, seriais:'S1', troca:'sim', trocaProduto:q.id, trocaQtd:'1', trocaPreco:'400', pagamento:'Pix', data:'2026-10-12'});
+    assert.match(msg, /Nova venda registrada/);
+    const nova = db.moves.filter(m => m.tipo === 'venda').at(-1);
+    assert.deepEqual([nova.productId, nova.valor, nova.cliente, nova.pagamento], [q.id, 400, 'Maria', 'Pix']);
+    const b = balanco(db, 'tudo', ref);
+    assert.equal(b.receita, 700);                                      // 300 que ficou + 400 da nova
+    assert.equal(b.caixaEntrou - b.reembolsos, 700);
+  });
+
+  test('troca que falha não deixa a devolução pela metade', () => {
+    const {db, v} = cenario();
+    const antes = JSON.stringify(db);
+    erro(() => devolverVenda(db, {venda:v.id, seriais:'S1', troca:'sim', trocaProduto:'', trocaQtd:'1', trocaPreco:'400'}), 'Escolha o produto');
+    assert.equal(JSON.stringify(db), antes);
+    assert.equal(db.moves.find(m => m.id === v.id).qty, 2);   // o rollback troca os objetos: confira pelo id
   });
 });
