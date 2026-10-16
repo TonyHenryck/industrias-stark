@@ -1,7 +1,8 @@
 import { esc, brl, opt, fmtDate } from '../format.js';
 import { prod, nomeProd } from '../../domain/queries.js';
 import { sortUnits } from '../../domain/util.js';
-import { prodOpts, badgeUnit } from '../shared.js';
+import { prodOpts, badgeUnit, badgeGarantia } from '../shared.js';
+import { garantiaDoFornecedor, garantiaDaVenda } from '../../domain/garantia.js';
 
 export function unidadesRows({db, fUnit}){
   const q = fUnit.q.trim().toLowerCase();
@@ -11,9 +12,11 @@ export function unidadesRows({db, fUnit}){
     (!q || (u.serial||'').toLowerCase().includes(q)));
   if(!list.length) return '<p class="empty">Nenhuma unidade encontrada.</p>';
   return `<div class="tbl"><table>
-    <thead><tr><th>Série</th><th>Produto</th><th>Status</th><th class="r">Custo</th><th>Entrada</th><th>Saída</th></tr></thead>
+    <thead><tr><th>Série</th><th>Produto</th><th>Status</th><th class="r">Custo</th><th>Entrada</th><th>Saída</th><th>Garantia do fornecedor</th><th>Garantia do cliente</th></tr></thead>
     <tbody>${list.map(u => `<tr><td class="mono">${esc(u.serial||'sem série')}</td><td>${esc(nomeProd(prod(db, u.productId)))}</td>
-      <td>${badgeUnit(u.status)}</td><td class="r">${brl(u.custo)}</td><td>${fmtDate(u.dataEntrada)}</td><td>${fmtDate(u.dataSaida)}</td></tr>`).join('')}
+      <td>${badgeUnit(u.status)}</td><td class="r">${brl(u.custo)}</td><td>${fmtDate(u.dataEntrada)}</td><td>${fmtDate(u.dataSaida)}</td>
+      <td>${u.status === 'disponivel' ? badgeGarantia(garantiaDoFornecedor(u)) : ''}</td>
+      <td>${u.status === 'vendido' ? badgeGarantia(garantiaDaVenda(db.moves.find(m => m.id === u.saidaId))) : ''}</td></tr>`).join('')}
     </tbody></table></div>`;
 }
 

@@ -1,6 +1,6 @@
-import { esc, brl, nf, badge } from '../format.js';
+import { esc, brl, nf, badge, fmtDate } from '../format.js';
 import { stock, avgCost, units, nomeProd, situacao } from '../../domain/queries.js';
-import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas } from '../../domain/reports.js';
+import { resumo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, topClientes, contas, garantiasVencendo } from '../../domain/reports.js';
 import { sum } from '../../domain/util.js';
 import { colunas, barras } from '../charts.js';
 import { periodoSelect } from '../shared.js';
@@ -33,6 +33,7 @@ export default ({db, periodo, metrica}) => {
   const antigo = estoqueMaisAntigo(db);
   const clientes = topClientes(db, periodo);
   const ct = contas(db);
+  const gv = garantiasVencendo(db);
   const ticket = b.vendasQtd ? b.receita / b.vendasQtd : 0;
 
   const topHtml = top.length ? barras(top.map(t => ({
@@ -50,6 +51,10 @@ export default ({db, periodo, metrica}) => {
   ${ct.qtdVencidas ? `<section class="card aviso">
     <p><strong>${ct.qtdVencidas} conta(s) vencida(s)</strong>${ct.vencidoReceber ? ` · a receber ${brl(ct.vencidoReceber)}` : ''}${ct.vencidoPagar ? ` · a pagar ${brl(ct.vencidoPagar)}` : ''}</p>
     <button class="btn small" data-act="go" data-v="contas">Ver contas</button></section>` : ''}
+  ${gv.length ? `<section class="card aviso">
+    <p><strong>Garantia do fornecedor acabando em até 15 dias:</strong>
+      ${gv.slice(0, 3).map(g => `${esc(g.nome)} (${g.qtd} un., até ${fmtDate(g.ate)})`).join(' · ')}${gv.length > 3 ? ` e mais ${gv.length - 3} modelo(s)` : ''}${gv.some(g => g.estimada) ? ' · prazo estimado em 90 dias da entrada' : ''}.</p>
+    <small class="sub">Teste os aparelhos e devolva os defeituosos antes do prazo.</small></section>` : ''}
   ${periodoSelect(periodo)}
   <div class="kpis">
     ${kpi('Em estoque', `${nf(disp.length)} un.`, `Custo ${brl(b.dinheiroParado)}`)}
