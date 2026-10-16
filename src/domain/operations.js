@@ -269,24 +269,46 @@ export function addContaPagar(db, f){
   return plano.length > 1 ? `${plano.length} parcelas a pagar registradas.` : 'Conta a pagar registrada.';
 }
 
-/** Marca como recebida/paga. Conta avulsa a pagar vira despesa na data do pagamento. */
-export function pagarConta(db, id, data){
+/**
+ * Marca como recebida/paga. Conta avulsa a pagar vira despesa na data do pagamento.
+ * Com `valor` menor que o da conta, é pagamento parcial: a conta vira paga só por esse valor (guardando o original)
+ * e o restante nasce como uma nova conta pendente, com o vencimento de `vencimento` (ou o mesmo da original).
+ */
+export function pagarConta(db, id, data, {valor, vencimento} = {}){
   const b = normalizar(db).bills.find(x => x.id === id) || fail('Conta não encontrada.');
   if(b.status !== 'pendente') fail('Esta conta não está pendente.');
   const quando = data || hoje();
   if(!dataValida(quando)) fail('Data de pagamento inválida.');
+  const informado = str(valor).trim() !== '';
+  const pago = informado ? arred(parseFloat(str(valor).replace(',', '.'))) : b.valor;
+  if(isNaN(pago) || pago <= 0) fail('Informe um valor maior que zero.');
+  if(pago > b.valor) fail(`O valor não pode passar do que falta (${b.valor.toFixed(2).replace('.', ',')}).`);
+  const resto = arred(b.valor - pago);
+  if(resto > 0 && vencimento && !dataValida(vencimento)) fail('Data de vencimento do restante inválida.');
+  if(resto > 0){
+    const nova = {...b, id:uid(), valor:resto, status:'pendente', dataPagamento:'', restanteDe:b.id, ts:Date.now()};
+    delete nova.despesaId; delete nova.restanteId; delete nova.valorOriginal;
+    nova.vencimento = vencimento || b.vencimento;
+    db.bills.push(nova);
+    b.restanteId = nova.id; b.valorOriginal = b.valor; b.valor = pago;
+  }
   b.status = 'pago'; b.dataPagamento = quando;
   if(b.tipo === 'pagar' && b.origem === 'manual'){
     const despesaId = uid();
     db.moves.push({id:despesaId, tipo:'despesa', data:quando, categoria:b.categoria || 'Outros', valor:b.valor, obs:b.descricao, billId:b.id, ts:Date.now()});
     b.despesaId = despesaId;
   }
-  return b.tipo === 'receber' ? 'Recebimento registrado.' : 'Pagamento registrado.';
+  const rotulo = b.tipo === 'receber' ? 'Recebimento' : 'Pagamento';
+  return resto > 0 ? `${rotulo} parcial registrado. Falta ${resto.toFixed(2).replace('.', ',')}.` : `${rotulo} registrado.`;
 }
 
 export function desfazerPagamento(db, id){
   const b = normalizar(db).bills.find(x => x.id === id) || fail('Conta não encontrada.');
   if(b.status !== 'pago') fail('Esta conta não está paga.');
+  const resto = b.restanteId && db.bills.find(x => x.id === b.restanteId);
+  if(resto && resto.status === 'pago') fail('O restante desta conta já foi pago. Desfaça primeiro o pagamento do restante.');
+  if(resto) db.bills = db.bills.filter(x => x.id !== resto.id);
+  if(b.valorOriginal){ b.valor = b.valorOriginal; delete b.valorOriginal; delete b.restanteId; }
   if(b.despesaId) db.moves = db.moves.filter(m => m.id !== b.despesaId);
   b.status = 'pendente'; b.dataPagamento = ''; delete b.despesaId;
   return 'Pagamento desfeito: a conta voltou a ficar pendente.';

@@ -95,3 +95,7 @@ As funções de `domain/` recebem o `db` como primeiro argumento e lançam `Doma
 ## Metas do mês
 
 No Painel, o cartão "Metas" mostra dois anéis: **vendas** (receita do mês) e **lucro líquido** (o mesmo número do Balanço). Defina os valores em "Definir metas". Sem meta própria no mês, vale a do último mês que teve uma, com um aviso. Deixar os dois campos vazios remove a meta. As metas ficam na tabela `metas` (rode o `schema.sql` de novo para criá-la).
+
+## Pagamento parcial
+
+Em Contas, o botão **Parcial** registra só uma parte do valor (e a data em que entrou ou saiu o dinheiro). A conta fecha por esse valor, mostrando "de R$ …", e o restante vira uma nova conta pendente, com o vencimento que você escolher. Em conta avulsa a pagar, a despesa é lançada só pelo valor pago. **Desfazer** devolve a conta ao valor original e apaga o restante; se o restante já foi pago, desfaça primeiro o pagamento dele.

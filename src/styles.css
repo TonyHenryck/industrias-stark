@@ -316,3 +316,5 @@ tbody tr:hover{background:rgba(255,255,255,.035)}
 .anel-txt small{color:var(--muted);font-size:12px}
 details.viz-table form{max-width:620px}
 .card-head .sub{margin:0}
+
+.linha-form td{padding:12px 7px 16px;background:rgba(255,255,255,.03);white-space:normal}

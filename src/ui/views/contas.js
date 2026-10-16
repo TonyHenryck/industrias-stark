@@ -13,25 +13,36 @@ const SITUACAO = {
   aVencer: () => badge('A vencer'),
 };
 
-function linha(c){
+function linha(c, parcial){
   const parcela = c.parcelas > 1 ? ` · parcela ${c.parcela}/${c.parcelas}` : '';
   const acoes = c.status === 'pago'
     ? `<button class="btn small" data-act="desfazerC" data-id="${c.id}">Desfazer</button>`
     : `<button class="btn small primary" data-act="pagarC" data-id="${c.id}">${c.tipo === 'receber' ? 'Receber' : 'Pagar'}</button>
+       <button class="btn small" data-act="parcialC" data-id="${c.id}" aria-expanded="${parcial === c.id}">Parcial</button>
        ${c.origem === 'manual' ? `<button class="btn small" data-act="delConta" data-id="${c.id}">Excluir</button>` : ''}`;
+  const restante = c.restanteDe ? ' · restante' : '';
+  const original = c.valorOriginal ? `<small class="sub" style="display:block">de ${brl(c.valorOriginal)}</small>` : '';
+  const aberto = parcial === c.id && c.status !== 'pago' ? `<tr class="linha-form"><td colspan="6">
+      <form data-form="pagamentoParcial" class="form">
+        <input type="hidden" name="id" value="${c.id}">
+        <label>Valor ${c.tipo === 'receber' ? 'recebido' : 'pago'} (R$)*<input name="valor" type="number" step="0.01" min="0.01" max="${c.valor}" required placeholder="Falta ${brl(c.valor)}"></label>
+        <label>Data*<input name="data" type="date" required value="${hoje()}"></label>
+        <label>Restante vence em<input name="vencimento" type="date" value="${c.vencimento}"></label>
+        <div class="actions" style="align-items:flex-end"><button class="btn primary" type="submit">Registrar</button><button class="btn" type="button" data-act="parcialC" data-id="${c.id}">Cancelar</button></div>
+      </form></td></tr>` : '';
   return `<tr>
     <td>${fmtDate(c.status === 'pago' ? c.dataPagamento : c.vencimento)}</td>
     <td>${c.tipo === 'receber' ? badge('A receber', 'ok') : badge('A pagar', 'bad')}</td>
-    <td style="white-space:normal;min-width:200px">${esc(c.descricao)}${parcela}${c.parte ? `<small class="sub" style="display:block">${esc(c.parte)}</small>` : ''}</td>
-    <td class="r">${brl(c.valor)}</td><td>${SITUACAO[c.situacao]()}</td><td><div class="acts">${acoes}</div></td></tr>`;
+    <td style="white-space:normal;min-width:200px">${esc(c.descricao)}${parcela}${restante}${c.parte ? `<small class="sub" style="display:block">${esc(c.parte)}</small>` : ''}</td>
+    <td class="r">${brl(c.valor)}${original}</td><td>${SITUACAO[c.situacao]()}</td><td><div class="acts">${acoes}</div></td></tr>${aberto}`;
 }
 
-export default ({db, contaTipo, contaStatus}) => {
+export default ({db, contaTipo, contaStatus, parcial}) => {
   const c = contas(db, {tipo: contaTipo, status: contaStatus});
   const seg = (v, l) => `<button type="button" class="${contaTipo === v ? 'on' : ''}" data-act="contaTipo" data-v="${v}" aria-pressed="${contaTipo === v}">${l}</button>`;
   const tabela = c.lista.length ? `<div class="tbl"><table>
     <thead><tr><th>${contaStatus === 'pagas' ? 'Pago em' : 'Vencimento'}</th><th>Tipo</th><th>Descrição</th><th class="r">Valor</th><th>Situação</th><th></th></tr></thead>
-    <tbody>${c.lista.map(linha).join('')}</tbody></table></div>`
+    <tbody>${c.lista.map(x => linha(x, parcial)).join('')}</tbody></table></div>`
     : `<p class="empty">${contaStatus === 'pagas' ? 'Nenhuma conta paga ainda.' : 'Nenhuma conta pendente. Venda "a receber" ou entrada "a pagar" aparecem aqui.'}</p>`;
 
   return `
