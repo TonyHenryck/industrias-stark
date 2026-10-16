@@ -13,6 +13,7 @@ export const state = {
   metrica: 'receita',
   contaTipo: 'todas',
   contaStatus: 'pendentes',
+  conferencia: null,        // resultado da conferência de caixa (só na tela, não é salvo)
   devolver: null,           // id da venda com o formulário de devolução aberto
   parcial: null,            // id da conta com o formulário de pagamento parcial aberto
   confirmImport: false,

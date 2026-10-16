@@ -1,3 +1,4 @@
+import { DomainError } from './errors.js';
 import { sum, hoje, fmtDate, somaDias, diasEntre } from './util.js';
 export { somaDias, diasEntre };
 import { prod, nomeProd, situacao, units, norm } from './queries.js';
@@ -111,6 +112,41 @@ export function balanco(db, periodo, ref = hoje()){
     dinheiroParado: sum(db.units.filter(u => u.status === 'disponivel'), 'custo'),
     porPagamento, porCategoria, listaDespesas: despesas.slice().sort((a, b) => b.ts - a.ts),
   };
+}
+
+/* ---------- primeiros passos ---------- */
+
+/** Roteiro para quem está começando: cada passo diz se já foi feito e em qual aba fazer. O último é opcional. */
+export function primeirosPassos(db){
+  const tem = tipo => db.moves.some(m => m.tipo === tipo && !m.cancelada);
+  const passos = [
+    {id:'fornecedor', texto:'Cadastre o fornecedor', dica:'Quem vende os aparelhos para você.', aba:'fornecedores', feito:db.suppliers.length > 0},
+    {id:'produto', texto:'Cadastre os produtos', dica:'Importe o catálogo ou crie um a um, com preço, custo e estoque mínimo.', aba:'produtos', feito:db.products.length > 0},
+    {id:'entrada', texto:'Registre a primeira compra', dica:'Com o número de série de cada aparelho, o custo e a garantia do fornecedor.', aba:'entradas', feito:tem('entrada')},
+    {id:'venda', texto:'Registre a primeira venda', dica:'Informe cliente, forma de pagamento e garantia.', aba:'vendas', feito:tem('venda')},
+    {id:'meta', texto:'Defina a meta do mês (opcional)', dica:'No Painel, em "Definir metas".', aba:'painel', feito:(db.metas || []).length > 0, opcional:true},
+  ];
+  return {passos, completo: passos.filter(p => !p.opcional).every(p => p.feito)};
+}
+
+/* ---------- conferência de caixa ---------- */
+
+/**
+ * Compara o dinheiro que você tem de verdade com o saldo do caixa do sistema (desde o início).
+ * `inicial` é o dinheiro que você já tinha antes de começar a usar o sistema: ele não é registrado em lugar nenhum.
+ */
+export function conferirCaixa(db, {real, inicial = ''}, ref = hoje()){
+  const num = (v, nome, obrigatorio) => {
+    const t = String(v ?? '').trim().replace(',', '.');
+    if(t === '') { if(obrigatorio) throw new DomainError(`Informe ${nome}.`); return 0; }
+    const n = parseFloat(t);
+    if(isNaN(n)) throw new DomainError(`Valor inválido em ${nome}.`);
+    return n;
+  };
+  const dinheiro = num(real, 'quanto dinheiro você tem hoje', true), base = num(inicial, 'o dinheiro que você tinha ao começar', false);
+  const sistema = balanco(db, 'tudo', ref).saldo;
+  const esperado = Math.round((base + sistema) * 100) / 100, diferenca = Math.round((dinheiro - esperado) * 100) / 100;
+  return {sistema, inicial: base, esperado, real: dinheiro, diferenca, situacao: diferenca === 0 ? 'bate' : diferenca > 0 ? 'sobra' : 'falta'};
 }
 
 /* ---------- metas do mês ---------- */

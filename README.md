@@ -103,3 +103,8 @@ Em Contas, o botão **Parcial** registra só uma parte do valor (e a data em que
 ## Devolução e troca
 
 Em Vendas, **Devolver ou trocar** abre um formulário na própria linha da venda. Escolha a quantidade (ou as séries), se o aparelho volta ao estoque ou vira baixa por defeito, e quanto dinheiro foi devolvido (o padrão é tudo; pode ser menos ou zero). A venda é ajustada no lugar, então Painel e Balanço já refletem a devolução; o dinheiro devolvido aparece como saída no caixa na data da devolução e a movimentação fica no Histórico. Na troca, o valor devolvido vira crédito e o novo aparelho entra como uma venda nova, tudo ou nada. Vendas com parcelas a receber em aberto não aceitam devolução (receba ou cancele antes), e uma venda que já teve devolução não pode mais ser cancelada.
+
+## Primeiros passos e conferência de caixa
+
+- **Primeiros passos:** enquanto faltar cadastrar fornecedor, produtos, a primeira compra ou a primeira venda, o Painel mostra um roteiro com botões que levam à aba certa. Ele some sozinho quando as etapas obrigatórias terminam (a meta do mês é opcional).
+- **Conferir o caixa:** no fim do Balanço, informe o dinheiro que você tem de verdade (e o que já tinha antes de começar) e o sistema compara com o saldo do caixa desde o início, apontando se sobra ou falta e o que provavelmente ficou sem lançar. O resultado fica só na tela. O caixa do Balanço agora também mostra o dinheiro devolvido a clientes.
