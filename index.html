@@ -25,12 +25,41 @@
     <div class="content-inner">
       <header class="head">
         <div>
-          <h1>Estoque de Smartwatches</h1>
+          <h1 id="titulo">Painel</h1>
           <div class="sub">Os dados ficam salvos neste navegador. Faça backup em Dados.</div>
+        </div>
+        <div class="topbar">
+          <button type="button" class="top-busca" data-act="abrirBusca" aria-label="Buscar (Ctrl+K)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <span>Buscar produto, cliente ou série</span><kbd>Ctrl K</kbd>
+          </button>
+          <div class="top-mais">
+            <button type="button" class="top-btn" data-act="maisMenu" aria-label="Novo registro" aria-haspopup="true" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <div class="mais-pop" id="maisPop" hidden>
+              <button type="button" data-act="go" data-v="vendas">Nova venda</button>
+              <button type="button" data-act="go" data-v="entradas">Nova entrada</button>
+              <button type="button" data-act="go" data-v="balanco">Nova despesa</button>
+              <button type="button" data-act="go" data-v="contas">Nova conta a pagar</button>
+              <button type="button" data-act="go" data-v="produtos">Novo produto</button>
+              <button type="button" data-act="go" data-v="clientes">Novo cliente</button>
+            </div>
+          </div>
         </div>
       </header>
       <main id="main"></main>
     </div>
+  </div>
+</div>
+<div id="busca" class="busca" hidden>
+  <div class="busca-painel" role="dialog" aria-modal="true" aria-label="Busca">
+    <div class="busca-campo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+      <input type="search" placeholder="Buscar produto, cliente, telefone, fornecedor ou série" autocomplete="off" aria-label="Buscar">
+    </div>
+    <div class="busca-lista" role="listbox"></div>
+    <div class="busca-rodape"><span>↑↓ navegar</span><span>Enter abrir</span><span>Esc fechar</span></div>
   </div>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>

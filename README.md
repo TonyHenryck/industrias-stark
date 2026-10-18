@@ -108,3 +108,9 @@ Em Vendas, **Devolver ou trocar** abre um formulário na própria linha da venda
 
 - **Primeiros passos:** enquanto faltar cadastrar fornecedor, produtos, a primeira compra ou a primeira venda, o Painel mostra um roteiro com botões que levam à aba certa. Ele some sozinho quando as etapas obrigatórias terminam (a meta do mês é opcional).
 - **Conferir o caixa:** no fim do Balanço, informe o dinheiro que você tem de verdade (e o que já tinha antes de começar) e o sistema compara com o saldo do caixa desde o início, apontando se sobra ou falta e o que provavelmente ficou sem lançar. O resultado fica só na tela. O caixa do Balanço agora também mostra o dinheiro devolvido a clientes.
+
+## Barra superior, busca (Ctrl+K) e contadores
+
+- **Busca global:** o campo no topo (ou **Ctrl+K**, **⌘K** no Mac) procura produto, cliente (nome ou telefone), fornecedor e número de série. Use as setas e **Enter** para abrir; **Esc** fecha. Série abre Unidades já filtrada; produto abre a edição; cliente abre o histórico dele.
+- **Botão +:** atalhos para nova venda, entrada, despesa, conta a pagar, produto e cliente.
+- **Contadores no menu:** Contas mostra quantas estão vencidas e Produtos quantos estão com estoque baixo ou zerado. O título da página é o da seção atual.

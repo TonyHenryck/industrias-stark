@@ -4,7 +4,7 @@ import { emptyDb, stock, avgCost, situacao, units } from '../src/domain/queries.
 import { DomainError } from '../src/domain/errors.js';
 import { somaMeses } from '../src/domain/util.js';
 import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, salvarFornecedor, excluirCliente, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, devolverVenda, MAX_FOTOS } from '../src/domain/operations.js';
-import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo, progressoMetas, conferirCaixa, primeirosPassos } from '../src/domain/reports.js';
+import { resumo, expText, intervalo, noPeriodo, balanco, serieVendas, topProdutos, estoqueMaisAntigo, resumoClientes, resumoFornecedores, topClientes, comprasDoCliente, contas, situacaoConta, consultarGarantia, garantiasVencendo, progressoMetas, conferirCaixa, primeirosPassos, buscar } from '../src/domain/reports.js';
 import { parseDias, garantiaAte, situacaoGarantia, garantiaDoFornecedor, GARANTIA_PADRAO } from '../src/domain/garantia.js';
 
 const novoProduto = (db, extra={}) => {
@@ -1231,5 +1231,41 @@ describe('conferência de caixa e primeiros passos', () => {
     assert.equal(r.passos.at(-1).feito, false);
     cancelarVenda(db, db.moves.find(m => m.tipo === 'venda').id);
     assert.equal(primeirosPassos(db).passos[3].feito, false);          // venda cancelada não conta
+  });
+});
+
+describe('busca global', () => {
+  const montar = () => {
+    const db = emptyDb(), p = novoProduto(db, {nome:'Kron Pro', marca:'Wearzone'});
+    novoProduto(db, {nome:'Easy'});
+    entrada(db, p, {seriais:'KR-1001\nKR-1002', custo:'100'});
+    salvarCliente(db, {nome:'Maria Souza', telefone:'(85) 99999-1234'});
+    salvarFornecedor(db, {nome:'XDistribuidora'});
+    return db;
+  };
+  test('exige pelo menos 2 letras e ignora maiúsculas', () => {
+    const db = montar();
+    assert.deepEqual(buscar(db, ''), []);
+    assert.deepEqual(buscar(db, 'k'), []);
+    assert.equal(buscar(db, 'KRON')[0].titulo, 'Kron Pro');
+  });
+  test('acha produto (por nome ou marca), cliente (nome ou telefone), fornecedor e série, nessa ordem', () => {
+    const db = montar();
+    assert.deepEqual(buscar(db, 'wearzone').map(r => r.tipo), ['produto']);
+    assert.deepEqual(buscar(db, 'maria').map(r => [r.tipo, r.titulo]), [['cliente', 'Maria Souza']]);
+    assert.deepEqual(buscar(db, '99999').map(r => r.tipo), ['cliente']);       // telefone sem formatação
+    assert.deepEqual(buscar(db, '85 99999-1234').map(r => r.tipo), ['cliente']);
+    assert.deepEqual(buscar(db, 'xdist').map(r => r.tipo), ['fornecedor']);
+    const r = buscar(db, 'kr-100');
+    assert.deepEqual(r.map(x => [x.tipo, x.serial]), [['serie', 'KR-1001'], ['serie', 'KR-1002']]);
+    assert.match(r[0].sub, /Kron Pro · em estoque/);
+  });
+  test('limita cada grupo e funciona sem as tabelas novas', () => {
+    const db = emptyDb();
+    for(let i = 0; i < 9; i++) novoProduto(db, {nome:`Relogio ${i}`});
+    assert.equal(buscar(db, 'relogio').length, 6);
+    assert.equal(buscar(db, 'relogio', 3).length, 3);
+    delete db.customers; delete db.suppliers;
+    assert.doesNotThrow(() => buscar(db, 'relogio'));
   });
 });

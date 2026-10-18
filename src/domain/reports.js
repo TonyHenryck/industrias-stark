@@ -114,6 +114,33 @@ export function balanco(db, periodo, ref = hoje()){
   };
 }
 
+/* ---------- busca global ---------- */
+
+export const BUSCA_MIN = 2;
+
+/**
+ * Busca em produtos (nome, variante, marca), clientes (nome, telefone), fornecedores (nome) e números de série.
+ * Devolve até `limite` itens por grupo, nessa ordem: [{tipo, id, titulo, sub}].
+ */
+export function buscar(db, texto, limite = 6){
+  const q = norm(texto);
+  if(q.length < BUSCA_MIN) return [];
+  const tem = (...campos) => campos.some(c => norm(c).includes(q));
+  const digitos = q.replace(/\D/g, '');
+  const fone = t => digitos.length >= BUSCA_MIN && String(t ?? '').replace(/\D/g, '').includes(digitos);
+  const grupo = (lista, f) => lista.filter(f).slice(0, limite);
+  const produtos = grupo(db.products, p => tem(p.nome, p.variante, p.marca))
+    .map(p => ({tipo:'produto', id:p.id, titulo:nomeProd(p), sub:`${p.marca ? p.marca + ' · ' : ''}Estoque: ${units(db, p.id).length}`}));
+  const clientes = grupo(db.customers || [], c => tem(c.nome, c.telefone) || fone(c.telefone))
+    .map(c => ({tipo:'cliente', id:c.id, titulo:c.nome, sub:c.telefone || 'Cliente'}));
+  const fornecedores = grupo(db.suppliers || [], f => tem(f.nome))
+    .map(f => ({tipo:'fornecedor', id:f.id, titulo:f.nome, sub:'Fornecedor'}));
+  const series = grupo(db.units.filter(u => u.serial), u => tem(u.serial))
+    .map(u => ({tipo:'serie', id:u.id, serial:u.serial, titulo:`Série ${u.serial}`,
+      sub:`${nomeProd(prod(db, u.productId))} · ${u.status === 'disponivel' ? 'em estoque' : u.status === 'vendido' ? 'vendida' : 'baixada'}`}));
+  return [...produtos, ...clientes, ...fornecedores, ...series];
+}
+
 /* ---------- primeiros passos ---------- */
 
 /** Roteiro para quem está começando: cada passo diz se já foi feito e em qual aba fazer. O último é opcional. */

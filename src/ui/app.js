@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { TABS, VIEWS } from './views/index.js';
 import { ICONS, logo } from './icons.js';
 import { iniciarTips } from './charts.js';
+import { iniciarBusca, abrirBusca, fecharBusca } from './busca.js';
 import { redimensionar } from './foto.js';
 import { uid } from '../domain/util.js';
 import { unidadesRows } from './views/unidades.js';
@@ -12,7 +13,7 @@ import { garantiaRows } from './views/movimentos.js';
 import { connect } from '../storage/index.js';
 import { DomainError } from '../domain/errors.js';
 import { salvarProduto, excluirProduto, addEntrada, addVenda, cancelarVenda, addBaixa, parseBackup, importarCatalogo, addDespesa, excluirDespesa, salvarCliente, excluirCliente, salvarFornecedor, excluirFornecedor, addContaPagar, pagarConta, desfazerPagamento, excluirConta, adicionarFoto, removerFoto, salvarMeta, devolverVenda } from '../domain/operations.js';
-import { expText, conferirCaixa } from '../domain/reports.js';
+import { expText, conferirCaixa, contas as contasDe, resumo } from '../domain/reports.js';
 import { CATALOGO_XDISTRIBUIDORA, FORNECEDOR_XDISTRIBUIDORA } from '../data/catalogo-xdistribuidora.js';
 
 let store, unsubscribe = () => {}, busy = false;
@@ -41,8 +42,11 @@ window.addEventListener('unhandledrejection', e => toast('Erro inesperado: ' + m
 
 function render(animar = false){
   state.confirmImport = false;
+  const cont = {contas: contasDe(state.db).qtdVencidas, produtos: resumo(state.db, 'tudo').alertas.length};
+  const aviso = {contas: 'conta(s) vencida(s)', produtos: 'produto(s) com estoque baixo'};
   $('#tabs').innerHTML = TABS.map(([k,l]) =>
-    `<button class="tab ${k===state.view?'on':''}" data-act="go" data-v="${k}" title="${l}" ${k===state.view?'aria-current="page"':''}>${ICONS[k]}<span>${l}</span></button>`).join('');
+    `<button class="tab ${k===state.view?'on':''}" data-act="go" data-v="${k}" title="${l}${cont[k] ? ` · ${cont[k]} ${aviso[k]}` : ''}" ${k===state.view?'aria-current="page"':''}>${ICONS[k]}<span>${l}</span>${cont[k] ? `<em class="cont" aria-label="${cont[k]} ${aviso[k]}">${cont[k]}</em>` : ''}</button>`).join('');
+  $('#titulo').textContent = (TABS.find(([k]) => k === state.view) || [])[1] || '';
   const main = $('#main');
   main.classList.toggle('enter', animar);
   main.innerHTML = VIEWS[state.view](state);
@@ -180,6 +184,18 @@ const FORMS = {
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
+  if(a==='abrirBusca'){ abrirBusca(state.db); return; }
+  if(a==='maisMenu'){ const pop = $('#maisPop'); pop.hidden = !pop.hidden; b.setAttribute('aria-expanded', String(!pop.hidden)); return; }
+  $('#maisPop').hidden = true;
+  if(a==='buscaIr'){
+    const {tipo, id, serial} = b.dataset;
+    state.editId = state.editCliente = state.editFornecedor = state.verCliente = null;
+    if(tipo==='produto'){ state.view = 'produtos'; state.editId = id; }
+    else if(tipo==='cliente'){ state.view = 'clientes'; state.verCliente = id; }
+    else if(tipo==='fornecedor'){ state.view = 'fornecedores'; state.editFornecedor = id; }
+    else { state.view = 'unidades'; state.fUnit = {st:'todos', pid:'', q:serial}; }
+    fecharBusca(); render(true); window.scrollTo(0,0); return;
+  }
   if(a==='go'){ state.view = b.dataset.v; state.editId = state.editCliente = state.editFornecedor = state.verCliente = null; render(true); window.scrollTo(0,0); }
   else if(a==='editP'){ state.editId = b.dataset.id; state.view = 'produtos'; render(); window.scrollTo(0,0); }
   else if(a==='cancelEdit'){ state.editId = null; render(); }
@@ -272,6 +288,9 @@ document.addEventListener('change', async e => {
 /* ---------- início ---------- */
 $('#brandLogo').innerHTML = logo('logoMenu');
 iniciarTips();
+iniciarBusca(() => state.db);
+document.addEventListener('click', e => { if(!e.target.closest('.top-mais')){ const p = $('#maisPop'); if(p) p.hidden = true; } });
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const p = $('#maisPop'); if(p) p.hidden = true; } });
 aplicarBarra(barraGuardada());
 store = await connect();
 state.fotoUrl = store.fotos ? c => store.fotos.url(c) : null;
