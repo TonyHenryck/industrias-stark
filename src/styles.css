@@ -376,3 +376,6 @@ body.busca-on{overflow:hidden}
   .busca{padding-top:8vh}
   .busca-rodape{display:none}
 }
+
+button.thumb.vazio{display:grid;place-items:center;padding:0;color:var(--accent-text);font:inherit;font-size:18px;line-height:1;cursor:pointer;transition:background .2s,color .2s}
+button.thumb.vazio:hover{background:rgba(255,255,255,.14);color:#fff}

@@ -6,7 +6,7 @@ import { CATALOGO_XDISTRIBUIDORA, CATALOGO_DATA } from '../../data/catalogo-xdis
 
 const thumb = (x, url) => {
   const c = x.fotos?.[0];
-  return `<td style="width:48px">${c && url ? `<img class="thumb" src="${esc(url(c))}" alt="Foto de ${esc(x.nome)}" loading="lazy">` : '<span class="thumb vazio" aria-hidden="true"></span>'}</td>`;
+  return `<td style="width:48px">${c && url ? `<img class="thumb" src="${esc(url(c))}" alt="Foto de ${esc(x.nome)}" loading="lazy">` : `<button type="button" class="thumb vazio" data-act="editP" data-id="${x.id}" title="Adicionar foto" aria-label="Adicionar foto de ${esc(x.nome)}">+</button>`}</td>`;
 };
 
 function painelFotos(p, url){
@@ -60,7 +60,7 @@ export default ({db, editId, fotoUrl}) => {
         ${p ? '<button class="btn" type="button" data-act="cancelEdit">Cancelar</button>' : ''}
       </div>
     </form>
-    ${p ? painelFotos(p, fotoUrl) : ''}
+    ${p ? painelFotos(p, fotoUrl) : '<p class="hint" style="margin:16px 0 0">Fotos: depois de cadastrar, esta tela reabre com o botão <b>Adicionar foto</b>. Dá para enviar até 3 por produto. Para produtos já cadastrados, clique no quadrado <b>+</b> da lista ou em Editar.</p>'}
   </section>
   <section class="card"><h2>Produtos cadastrados</h2>${lista}</section>`;
 };
