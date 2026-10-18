@@ -251,7 +251,7 @@ document.addEventListener('submit', async e => {
     render(); return;
   }
   if(FORMS[k] && await run(() => FORMS[k](dados))){
-    if(k==='produto') state.editId = null;
+    if(k==='produto') state.editId = dados.id ? null : state.db.products.at(-1)?.id ?? null;   // produto novo: reabre para já poder enviar a foto
     if(k==='cliente') state.editCliente = null;
     if(k==='fornecedor') state.editFornecedor = null;
     if(k==='pagamentoParcial') state.parcial = null;
