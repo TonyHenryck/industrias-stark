@@ -379,3 +379,54 @@ body.busca-on{overflow:hidden}
 
 button.thumb.vazio{display:grid;place-items:center;padding:0;color:var(--accent-text);font:inherit;font-size:18px;line-height:1;cursor:pointer;transition:background .2s,color .2s}
 button.thumb.vazio:hover{background:rgba(255,255,255,.14);color:#fff}
+
+/* ---------- login em vidro com cantos cortados ---------- */
+body.auth{background:#05060c}
+body.auth .content{position:relative;overflow:hidden}
+.login-fundo{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;
+  background:radial-gradient(900px 600px at 70% 20%,rgba(109,93,240,.16),transparent 65%),radial-gradient(800px 600px at 15% 90%,rgba(59,130,246,.12),transparent 65%),#05060c}
+.login-fundo i{position:absolute;left:-20%;width:140%;height:90px;border-radius:50%;filter:blur(18px);opacity:.55;
+  background:linear-gradient(90deg,transparent,rgba(139,124,246,.0) 15%,rgba(139,124,246,.65) 50%,rgba(99,102,241,0) 85%,transparent);animation:deriva 14s ease-in-out infinite alternate}
+.login-fundo i:nth-child(1){top:12%;transform:rotate(-24deg)}
+.login-fundo i:nth-child(2){top:48%;height:60px;opacity:.4;transform:rotate(-24deg);animation-duration:18s;animation-delay:-6s}
+.login-fundo i:nth-child(3){top:78%;height:120px;opacity:.28;transform:rotate(-24deg);animation-duration:22s;animation-delay:-3s;
+  background:linear-gradient(90deg,transparent,rgba(59,130,246,.55) 50%,transparent)}
+@keyframes deriva{from{translate:-4% 0}to{translate:4% -3%}}
+body.auth .login{position:relative;z-index:1;width:min(420px,100%);padding:1px;border:0;border-radius:0;text-align:left;box-shadow:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.55),rgba(255,255,255,.08) 38%,rgba(139,124,246,.55) 100%);
+  --corte:26px;clip-path:polygon(var(--corte) 0,calc(100% - var(--corte)) 0,100% var(--corte),100% calc(100% - var(--corte)),calc(100% - var(--corte)) 100%,var(--corte) 100%,0 calc(100% - var(--corte)),0 var(--corte));
+  filter:drop-shadow(0 30px 60px rgba(0,0,0,.6));animation:rise .55s cubic-bezier(.2,.8,.2,1) both}
+body.auth .login-in{position:relative;box-sizing:border-box;padding:34px 30px 30px;min-height:420px;overflow:hidden;
+  background:linear-gradient(160deg,rgba(26,24,44,.9),rgba(10,10,20,.92));-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);
+  clip-path:polygon(25px 0,calc(100% - 25px) 0,100% 25px,100% calc(100% - 25px),calc(100% - 25px) 100%,25px 100%,0 calc(100% - 25px),0 25px)}
+body.auth .login-in::before,body.auth .login-in::after{content:"";position:absolute;width:40px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,#a89cff,transparent);box-shadow:0 0 10px rgba(139,124,246,.8)}
+body.auth .login-in::before{top:12px;left:-5px;transform:rotate(-45deg)}
+body.auth .login-in::after{bottom:12px;right:-5px;transform:rotate(-45deg)}
+.login-conteudo{text-align:left}
+.login-conteudo .logo{display:flex;justify-content:flex-start;margin-bottom:6px}
+.login-conteudo .logo svg{width:46px;height:46px}
+.login h2{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:10px 0 4px}
+.login h2 span{color:#a89cff}
+.login-sub{margin:0 0 22px}
+.campo{position:relative;display:flex;align-items:center}
+.campo>svg{position:absolute;left:12px;width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.campo input{padding:11px 42px 11px 40px;border-radius:12px}
+.ver-senha{position:absolute;right:6px;display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:none;color:var(--muted);cursor:pointer;padding:0}
+.ver-senha:hover,.ver-senha[aria-pressed=true]{color:#fff;background:rgba(255,255,255,.08)}
+.ver-senha svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.login .btn.primary{border-radius:12px;padding:12px 14px;background:linear-gradient(135deg,#5b50e6,#8b7cf6);box-shadow:0 10px 28px rgba(109,93,240,.45), var(--glass-edge)}
+.login .btn.primary span{display:inline-block;transition:transform .2s}
+.login .btn.primary:hover span{transform:translateX(4px)}
+/* abertura: logo no vidro com anéis, depois o formulário */
+.login-splash{position:absolute;inset:0;z-index:2;display:grid;place-items:center;pointer-events:none;animation:splash-sai .5s ease 1.7s forwards}
+.login-splash .logo svg{width:84px;height:84px;position:relative;animation:splash-logo 1.7s ease both}
+.login-splash .anel{position:absolute;left:50%;top:50%;width:90px;height:90px;margin:-45px 0 0 -45px;border-radius:50%;border:1.5px solid rgba(139,124,246,.7);opacity:0;animation:anel 1.7s ease-out infinite}
+.login-splash .a2{animation-delay:.55s}
+.com-intro .login-conteudo{animation:conteudo-entra .6s ease 1.65s both}
+@keyframes anel{0%{transform:scale(.6);opacity:.9}100%{transform:scale(3);opacity:0}}
+@keyframes splash-logo{0%{transform:scale(.7);opacity:0}35%{opacity:1}60%{transform:scale(1.05)}100%{transform:scale(1)}}
+@keyframes splash-sai{to{opacity:0;visibility:hidden}}
+@keyframes conteudo-entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.login-splash{display:none}}
+@media (max-width:760px){body.auth .login{--corte:20px}body.auth .login-in{padding:28px 22px 24px}}
+.login{-webkit-backdrop-filter:none;backdrop-filter:none}
