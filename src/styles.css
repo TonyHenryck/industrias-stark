@@ -392,11 +392,11 @@ body.auth .content{position:relative;overflow:hidden}
 .login-fundo i:nth-child(3){top:78%;height:120px;opacity:.28;transform:rotate(-24deg);animation-duration:22s;animation-delay:-3s;
   background:linear-gradient(90deg,transparent,rgba(59,130,246,.55) 50%,transparent)}
 @keyframes deriva{from{translate:-4% 0}to{translate:4% -3%}}
-body.auth .login{position:relative;z-index:1;width:min(420px,100%);padding:1px;border:0;border-radius:0;text-align:left;box-shadow:none;
+body.auth .login{position:relative;z-index:1;width:420px;max-width:calc(100vw - 32px);padding:1px;border:0;border-radius:0;text-align:left;box-shadow:none;
   background:linear-gradient(135deg,rgba(255,255,255,.55),rgba(255,255,255,.08) 38%,rgba(139,124,246,.55) 100%);
   --corte:26px;clip-path:polygon(var(--corte) 0,calc(100% - var(--corte)) 0,100% var(--corte),100% calc(100% - var(--corte)),calc(100% - var(--corte)) 100%,var(--corte) 100%,0 calc(100% - var(--corte)),0 var(--corte));
   filter:drop-shadow(0 30px 60px rgba(0,0,0,.6));animation:rise .55s cubic-bezier(.2,.8,.2,1) both}
-body.auth .login-in{position:relative;box-sizing:border-box;padding:34px 30px 30px;min-height:420px;overflow:hidden;
+body.auth .login-in{position:relative;box-sizing:border-box;padding:34px 30px 30px;min-height:380px;overflow:hidden;
   background:linear-gradient(160deg,rgba(26,24,44,.9),rgba(10,10,20,.92));-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);
   clip-path:polygon(25px 0,calc(100% - 25px) 0,100% 25px,100% calc(100% - 25px),calc(100% - 25px) 100%,25px 100%,0 calc(100% - 25px),0 25px)}
 body.auth .login-in::before,body.auth .login-in::after{content:"";position:absolute;width:40px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,#a89cff,transparent);box-shadow:0 0 10px rgba(139,124,246,.8)}
@@ -407,6 +407,7 @@ body.auth .login-in::after{bottom:12px;right:-5px;transform:rotate(-45deg)}
 .login-conteudo .logo svg{width:46px;height:46px}
 .login h2{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:10px 0 4px}
 .login h2 span{color:#a89cff}
+.login h2{margin-bottom:22px}
 .login-sub{margin:0 0 22px}
 .campo{position:relative;display:flex;align-items:center}
 .campo>svg{position:absolute;left:12px;width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}

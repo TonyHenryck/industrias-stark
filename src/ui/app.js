@@ -78,7 +78,6 @@ function renderLogin(msg=''){
       <div class="login-conteudo">
         <div class="logo">${logo('logoLogin')}</div>
         <h2>Bem-vindo <span>de volta</span></h2>
-        <p class="login-sub">Entre com seu e-mail e senha. O acesso é só para quem foi liberado.</p>
         ${msg ? `<p class="alert" role="alert">${esc(msg)}</p>` : ''}
         <form data-form="login" class="form" style="grid-template-columns:1fr">
           <label>E-mail<span class="campo">${ico('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>')}<input name="email" type="email" required autocomplete="username" autofocus placeholder="voce@exemplo.com"></span></label>
