@@ -61,22 +61,33 @@ function aplicarBarra(recolhida){
 function lembrarBarra(recolhida){ try{ localStorage.setItem('estoque-barra-recolhida', recolhida ? '1' : '0'); }catch(e){} }
 function barraGuardada(){ try{ return localStorage.getItem('estoque-barra-recolhida') === '1'; }catch(e){ return false; } }
 
+let introFeita = false;   // a animação de abertura toca só na primeira vez; um erro de senha não a repete
+
 function renderLogin(msg=''){
   document.body.classList.add('auth');
   $('#tabs').innerHTML = '';
   $('#user').innerHTML = '';
   $('#main').classList.remove('enter');
+  const intro = !introFeita; introFeita = true;
+  const ico = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
   $('#main').innerHTML = `
-  <section class="login">
-    <div class="logo">${logo('logoLogin')}</div>
-    <h2>Indústrias Stark</h2>
-    <p class="login-sub">Estoque de smartwatches. Acesso só para quem foi liberado.</p>
-    ${msg ? `<p class="alert" role="alert">${esc(msg)}</p>` : ''}
-    <form data-form="login" class="form" style="grid-template-columns:1fr">
-      <label>E-mail<input name="email" type="email" required autocomplete="username" autofocus></label>
-      <label>Senha<input name="password" type="password" required autocomplete="current-password"></label>
-      <div class="actions"><button class="btn primary" type="submit">Entrar</button></div>
-    </form>
+  <div class="login-fundo" aria-hidden="true"><i></i><i></i><i></i></div>
+  <section class="login ${intro ? 'com-intro' : ''}">
+    <div class="login-in">
+      ${intro ? `<div class="login-splash" aria-hidden="true"><span class="anel a1"></span><span class="anel a2"></span><div class="logo">${logo('logoSplash')}</div></div>` : ''}
+      <div class="login-conteudo">
+        <div class="logo">${logo('logoLogin')}</div>
+        <h2>Bem-vindo <span>de volta</span></h2>
+        <p class="login-sub">Entre com seu e-mail e senha. O acesso é só para quem foi liberado.</p>
+        ${msg ? `<p class="alert" role="alert">${esc(msg)}</p>` : ''}
+        <form data-form="login" class="form" style="grid-template-columns:1fr">
+          <label>E-mail<span class="campo">${ico('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>')}<input name="email" type="email" required autocomplete="username" autofocus placeholder="voce@exemplo.com"></span></label>
+          <label>Senha<span class="campo">${ico('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>')}<input name="password" type="password" required autocomplete="current-password" placeholder="Sua senha">
+            <button type="button" class="ver-senha" data-act="verSenha" aria-label="Mostrar senha" aria-pressed="false">${ico('<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')}</button></span></label>
+          <div class="actions"><button class="btn primary" type="submit">Entrar <span aria-hidden="true">→</span></button></div>
+        </form>
+      </div>
+    </div>
   </section>`;
 }
 
@@ -184,6 +195,7 @@ const FORMS = {
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
+  if(a==='verSenha'){ const c = b.closest('.campo').querySelector('input'), ver = c.type === 'password'; c.type = ver ? 'text' : 'password'; b.setAttribute('aria-pressed', String(ver)); b.setAttribute('aria-label', ver ? 'Ocultar senha' : 'Mostrar senha'); return; }
   if(a==='abrirBusca'){ abrirBusca(state.db); return; }
   if(a==='maisMenu'){ const pop = $('#maisPop'); pop.hidden = !pop.hidden; b.setAttribute('aria-expanded', String(!pop.hidden)); return; }
   $('#maisPop').hidden = true;

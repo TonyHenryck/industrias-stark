@@ -114,3 +114,7 @@ Em Vendas, **Devolver ou trocar** abre um formulário na própria linha da venda
 - **Busca global:** o campo no topo (ou **Ctrl+K**, **⌘K** no Mac) procura produto, cliente (nome ou telefone), fornecedor e número de série. Use as setas e **Enter** para abrir; **Esc** fecha. Série abre Unidades já filtrada; produto abre a edição; cliente abre o histórico dele.
 - **Botão +:** atalhos para nova venda, entrada, despesa, conta a pagar, produto e cliente.
 - **Contadores no menu:** Contas mostra quantas estão vencidas e Produtos quantos estão com estoque baixo ou zerado. O título da página é o da seção atual.
+
+## Tela de login
+
+Vidro fosco com cantos cortados, fundo com faixas de luz e uma abertura curta (logo com anéis) que toca só na primeira vez que a tela aparece; um erro de senha não a repete. Quem prefere menos movimento no sistema operacional vê tudo parado. O olho no campo de senha mostra ou esconde o que foi digitado. Não há cadastro, login social nem "esqueci a senha": as contas são criadas no Supabase, só para quem foi liberado.
