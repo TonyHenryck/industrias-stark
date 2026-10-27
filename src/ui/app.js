@@ -28,7 +28,11 @@ function toast(msg, err=false){
 
 const SQL_LIBERAR = "insert into public.members (user_id)\nselect id from auth.users where email = 'SEU_EMAIL_AQUI'\non conflict do nothing;";
 
+const SEM_CONEXAO = 'Sem conexão com o Supabase (o servidor não respondeu). Confira a internet e tente de novo. Se continuar, o projeto pode estar pausado: abra o painel do Supabase, entre no projeto e clique em Restore project.';
+const semConexao = e => /failed to fetch|networkerror|load failed|ERR_NAME_NOT_RESOLVED|fetch failed/i.test(`${e?.name} ${e?.message} ${e}`);
+
 const msgErro = e => {
+  if(semConexao(e)) return SEM_CONEXAO;
   const m = e?.message || String(e);
   if(/bucket not found/i.test(m)) return 'O espaço de fotos ainda não existe no Supabase. Rode o arquivo supabase/schema.sql no SQL Editor.';
   return /row-level security|permission denied/i.test(m)
@@ -254,7 +258,7 @@ document.addEventListener('submit', async e => {
   const dados = Object.fromEntries(new FormData(f));
   if(k==='login'){
     try{ await store.auth.signIn(dados.email, dados.password); }
-    catch(err){ renderLogin('E-mail ou senha inválidos.'); }
+    catch(err){ renderLogin(semConexao(err) ? SEM_CONEXAO : 'E-mail ou senha inválidos.'); }
     return;
   }
   if(k==='conferencia'){
@@ -325,7 +329,7 @@ async function iniciar(){
 function renderFalhaInicial(e){
   document.body.classList.remove('auth');
   const m = e?.message || String(e);
-  const rede = /dynamically imported module|Failed to fetch|NetworkError|Load failed/i.test(m);
+  const rede = /dynamically imported module/i.test(m);   // a biblioteca do Supabase não chegou; já falha de conexão com o servidor cai em msgErro
   $('#main').innerHTML = `<section class="card">
     <h2>Não foi possível abrir o sistema</h2>
     <p class="alert">${rede ? 'Um arquivo necessário não carregou. Isso costuma ser internet instável, bloqueador de anúncios, VPN ou antivírus.' : esc(msgErro(e))}</p>

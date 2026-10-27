@@ -122,3 +122,7 @@ Vidro fosco com cantos cortados, fundo com faixas de luz e uma abertura curta (l
 ## Se a tela abrir sem menu e sem conteúdo
 
 O sistema carrega a biblioteca do Supabase de um servidor externo (jsDelivr). Se esse arquivo não chegar ao navegador (internet instável, bloqueador de anúncios, VPN, antivírus), o app agora mostra "Não foi possível abrir o sistema" com o botão **Tentar de novo**, em vez de uma tela em branco. Os dados ficam salvos no Supabase e não são afetados.
+
+## "Sem conexão com o Supabase" e projeto pausado
+
+Se o navegador não conseguir falar com o servidor do Supabase (internet, DNS, bloqueio ou **projeto pausado**), o login e as telas mostram "Sem conexão com o Supabase" em vez de "e-mail ou senha inválidos". No plano gratuito o Supabase **pausa projetos sem uso por cerca de uma semana**: o endereço deixa de responder e o console do navegador mostra `ERR_NAME_NOT_RESOLVED`. Para reativar, abra o painel do Supabase, entre no projeto e clique em **Restore project** (leva alguns minutos). Os dados não são apagados na pausa.
