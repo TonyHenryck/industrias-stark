@@ -126,3 +126,7 @@ O sistema carrega a biblioteca do Supabase de um servidor externo (jsDelivr). Se
 ## "Sem conexão com o Supabase" e projeto pausado
 
 Se o navegador não conseguir falar com o servidor do Supabase (internet, DNS, bloqueio ou **projeto pausado**), o login e as telas mostram "Sem conexão com o Supabase" em vez de "e-mail ou senha inválidos". No plano gratuito o Supabase **pausa projetos sem uso por cerca de uma semana**: o endereço deixa de responder e o console do navegador mostra `ERR_NAME_NOT_RESOLVED`. Para reativar, abra o painel do Supabase, entre no projeto e clique em **Restore project** (leva alguns minutos). Os dados não são apagados na pausa.
+
+## Abertura sem rede
+
+Ao abrir, o sistema mostra só "Carregando…" (menu e barra superior ficam ocultos) até decidir entre login, painel ou erro. Se o Supabase não responder em 10 segundos, aparece "Sem conexão com o Supabase" com o botão **Tentar de novo**, e o menu fica travado: sem dados carregados, qualquer tela abriria vazia e daria a impressão de que os dados sumiram. Eles continuam salvos no Supabase.

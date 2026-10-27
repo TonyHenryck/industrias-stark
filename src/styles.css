@@ -431,3 +431,8 @@ body.auth .login-in::after{bottom:12px;right:-5px;transform:rotate(-45deg)}
 @media (prefers-reduced-motion: reduce){.login-splash{display:none}}
 @media (max-width:760px){body.auth .login{--corte:20px}body.auth .login-in{padding:28px 22px 24px}}
 .login{-webkit-backdrop-filter:none;backdrop-filter:none}
+
+/* ---------- abertura: nada clicável até o app decidir entre login, painel ou erro ---------- */
+body.boot .sidebar,body.boot .head{visibility:hidden}
+.carregando{padding:40px 0;text-align:center}
+body.falha .topbar,body.falha .head .sub,body.falha nav#tabs{display:none}

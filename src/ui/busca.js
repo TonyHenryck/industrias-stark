@@ -50,7 +50,7 @@ export function iniciarBusca(getDb){
   });
   p.addEventListener('click', e => { if(e.target === p) fecharBusca(); });
   document.addEventListener('keydown', e => {
-    if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && !document.body.classList.contains('auth')){
+    if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && !document.body.classList.contains('auth') && !document.body.classList.contains('falha')){
       e.preventDefault(); buscaAberta() ? fecharBusca() : abrirBusca(getDb());
     }
   });

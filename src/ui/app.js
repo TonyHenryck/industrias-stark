@@ -29,7 +29,7 @@ function toast(msg, err=false){
 const SQL_LIBERAR = "insert into public.members (user_id)\nselect id from auth.users where email = 'SEU_EMAIL_AQUI'\non conflict do nothing;";
 
 const SEM_CONEXAO = 'Sem conexão com o Supabase (o servidor não respondeu). Confira a internet e tente de novo. Se continuar, o projeto pode estar pausado: abra o painel do Supabase, entre no projeto e clique em Restore project.';
-const semConexao = e => /failed to fetch|networkerror|load failed|ERR_NAME_NOT_RESOLVED|fetch failed/i.test(`${e?.name} ${e?.message} ${e}`);
+const semConexao = e => /failed to fetch|networkerror|load failed|ERR_NAME_NOT_RESOLVED|fetch failed|não respondeu em/i.test(`${e?.name} ${e?.message} ${e}`);
 
 const msgErro = e => {
   if(semConexao(e)) return SEM_CONEXAO;
@@ -68,6 +68,7 @@ function barraGuardada(){ try{ return localStorage.getItem('estoque-barra-recolh
 let introFeita = false;   // a animação de abertura toca só na primeira vez; um erro de senha não a repete
 
 function renderLogin(msg=''){
+  document.body.classList.remove('boot', 'falha');
   document.body.classList.add('auth');
   $('#tabs').innerHTML = '';
   $('#user').innerHTML = '';
@@ -95,6 +96,7 @@ function renderLogin(msg=''){
 }
 
 const TEMPO_MAX_MS = 20000;
+const TEMPO_SESSAO_MS = 10000;
 const comTempo = (promessa, ms) => Promise.race([promessa,
   new Promise((_, rej) => setTimeout(() => rej(new Error(`O servidor não respondeu em ${ms/1000} segundos.`)), ms))]);
 
@@ -109,7 +111,7 @@ let usuarioAtual = null;
 
 async function startSession(user){
   usuarioAtual = user;
-  document.body.classList.remove('auth');
+  document.body.classList.remove('boot', 'auth', 'falha');
   $('.head .sub').textContent = textoRodape();
   $('#user').innerHTML = user ? `<span class="side-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn small" data-act="logout">Sair</button>` : '';
   $('#main').innerHTML = '<p class="empty">Carregando…</p>';
@@ -198,6 +200,7 @@ const FORMS = {
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
+  if(document.body.classList.contains('falha') && a !== 'recarregar') return;
   if(a==='verSenha'){ const c = b.closest('.campo').querySelector('input'), ver = c.type === 'password'; c.type = ver ? 'text' : 'password'; b.setAttribute('aria-pressed', String(ver)); b.setAttribute('aria-label', ver ? 'Ocultar senha' : 'Mostrar senha'); return; }
   if(a==='recarregar'){ location.reload(); return; }
   if(a==='abrirBusca'){ abrirBusca(state.db); return; }
@@ -321,13 +324,14 @@ async function iniciar(){
       if(user) await startSession(user); else { unsubscribe(); renderLogin(); }
     };
     store.auth.onChange(entrar);
-    await entrar(await store.auth.user());
+    await entrar(await comTempo(store.auth.user(), TEMPO_SESSAO_MS));   // sem rede, ler a sessão pode ficar tentando renovar o token por minutos
   }
 }
 
 /** Falha ao abrir o app (por exemplo, o Supabase não carregou): nunca deixa a tela em branco. */
 function renderFalhaInicial(e){
-  document.body.classList.remove('auth');
+  document.body.classList.remove('boot', 'auth');
+  document.body.classList.add('falha');   // trava o menu: sem dados carregados, qualquer tela abriria vazia e enganaria
   const m = e?.message || String(e);
   const rede = /dynamically imported module/i.test(m);   // a biblioteca do Supabase não chegou; já falha de conexão com o servidor cai em msgErro
   $('#main').innerHTML = `<section class="card">
