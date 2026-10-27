@@ -195,6 +195,7 @@ document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
   if(a==='verSenha'){ const c = b.closest('.campo').querySelector('input'), ver = c.type === 'password'; c.type = ver ? 'text' : 'password'; b.setAttribute('aria-pressed', String(ver)); b.setAttribute('aria-label', ver ? 'Ocultar senha' : 'Mostrar senha'); return; }
+  if(a==='recarregar'){ location.reload(); return; }
   if(a==='abrirBusca'){ abrirBusca(state.db); return; }
   if(a==='maisMenu'){ const pop = $('#maisPop'); pop.hidden = !pop.hidden; b.setAttribute('aria-expanded', String(!pop.hidden)); return; }
   $('#maisPop').hidden = true;
@@ -303,17 +304,34 @@ iniciarBusca(() => state.db);
 document.addEventListener('click', e => { if(!e.target.closest('.top-mais')){ const p = $('#maisPop'); if(p) p.hidden = true; } });
 document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const p = $('#maisPop'); if(p) p.hidden = true; } });
 aplicarBarra(barraGuardada());
-store = await connect();
-state.fotoUrl = store.fotos ? c => store.fotos.url(c) : null;
-if(!store.auth){
-  await startSession(null);
-}else{
-  let atual;  // undefined = ainda não decidido; null = sem sessão
-  const entrar = async user => {
-    if(atual !== undefined && (user?.id ?? null) === (atual?.id ?? null)) return;
-    atual = user;
-    if(user) await startSession(user); else { unsubscribe(); renderLogin(); }
-  };
-  store.auth.onChange(entrar);
-  await entrar(await store.auth.user());
+async function iniciar(){
+  store = await connect();
+  state.fotoUrl = store.fotos ? c => store.fotos.url(c) : null;
+  if(!store.auth){
+    await startSession(null);
+  }else{
+    let atual;  // undefined = ainda não decidido; null = sem sessão
+    const entrar = async user => {
+      if(atual !== undefined && (user?.id ?? null) === (atual?.id ?? null)) return;
+      atual = user;
+      if(user) await startSession(user); else { unsubscribe(); renderLogin(); }
+    };
+    store.auth.onChange(entrar);
+    await entrar(await store.auth.user());
+  }
 }
+
+/** Falha ao abrir o app (por exemplo, o Supabase não carregou): nunca deixa a tela em branco. */
+function renderFalhaInicial(e){
+  document.body.classList.remove('auth');
+  const m = e?.message || String(e);
+  const rede = /dynamically imported module|Failed to fetch|NetworkError|Load failed/i.test(m);
+  $('#main').innerHTML = `<section class="card">
+    <h2>Não foi possível abrir o sistema</h2>
+    <p class="alert">${rede ? 'Um arquivo necessário não carregou. Isso costuma ser internet instável, bloqueador de anúncios, VPN ou antivírus.' : esc(msgErro(e))}</p>
+    <p class="hint">Confira a conexão e clique em Tentar de novo. Se continuar, tente outra rede ou desative o bloqueador para este site. Seus dados continuam salvos.</p>
+    ${rede ? `<p class="hint mono">${esc(m)}</p>` : ''}
+    <div class="actions"><button class="btn primary" data-act="recarregar">Tentar de novo</button></div></section>`;
+}
+
+try{ await iniciar(); }catch(e){ console.error(e); renderFalhaInicial(e); }
