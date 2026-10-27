@@ -118,3 +118,7 @@ Em Vendas, **Devolver ou trocar** abre um formulário na própria linha da venda
 ## Tela de login
 
 Vidro fosco com cantos cortados, fundo com faixas de luz e uma abertura curta (logo com anéis) que toca só na primeira vez que a tela aparece; um erro de senha não a repete. Quem prefere menos movimento no sistema operacional vê tudo parado. O olho no campo de senha mostra ou esconde o que foi digitado. Não há cadastro, login social nem "esqueci a senha": as contas são criadas no Supabase, só para quem foi liberado.
+
+## Se a tela abrir sem menu e sem conteúdo
+
+O sistema carrega a biblioteca do Supabase de um servidor externo (jsDelivr). Se esse arquivo não chegar ao navegador (internet instável, bloqueador de anúncios, VPN, antivírus), o app agora mostra "Não foi possível abrir o sistema" com o botão **Tentar de novo**, em vez de uma tela em branco. Os dados ficam salvos no Supabase e não são afetados.
